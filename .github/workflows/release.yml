@@ -1,0 +1,4 @@
+permissions:
+  id-token: write      # 用于签名证书（OIDC token）
+  contents: write      # 用于创建 Release
+  attestations: write  # 用于生成 Attestation
