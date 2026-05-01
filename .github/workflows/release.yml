@@ -1,21 +1,23 @@
-name: Build and Release EXE
+name: Build and Release (Windows + macOS)
 
 on:
   push:
-    branches: [ "main", "master" ] # 每次推送到主分支都会触发
     tags:
-      - 'v*'                     # 打版本号标签时也会触发
-  workflow_dispatch:             # 👑 关键：允许你在 GitHub 网页上直接点按钮运行！
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      - 'v*' # 打标签时自动触发
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'v2.1.0'
+        required: true
+        default: 'v2.1.0'
 
 jobs:
+  # ==================== 工人 1：负责打包 Windows (生成 .exe) ====================
   build-windows:
     runs-on: windows-latest
     permissions:
       id-token: write
-      contents: write
+      contents: read
       attestations: write
 
     steps:
@@ -34,24 +36,93 @@ jobs:
 
       - name: Package to EXE
         run: |
-          pyinstaller --noconsole --onefile --name "Subtitled-video-Pro" --collect-all playwright main.py
+          pyinstaller --noconfirm --clean --noconsole --onefile --name "SubtitleVideoPro-Windows" --collect-all playwright main.py
 
-      - name: Attest EXE
+      - name: Attest Windows EXE (生成安全证明)
         uses: actions/attest-build-provenance@v2
         with:
-          subject-path: 'dist/Subtitled-video-Pro.exe'
+          subject-path: 'dist/SubtitleVideoPro-Windows.exe'
 
-      # 👑 新增：不管有没有 Tag，永远把打包好的 EXE 存到这次运行记录里，方便随时下载测试
-      - name: Upload EXE as Artifact
+      - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Subtitled-video-Pro-Windows
-          path: dist/Subtitled-video-Pro.exe
+          name: Windows-EXE
+          path: dist/SubtitleVideoPro-Windows.exe
 
-      # 👑 修改：加了一个 if 判断。只有当你推送了 'v' 开头的 Tag 时，才会去创建正式 Release
-      - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/')
+  # ==================== 工人 2：负责打包 macOS (生成 .dmg) ====================
+  build-macos:
+    runs-on: macos-latest
+    permissions:
+      id-token: write
+      contents: read
+      attestations: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller PyQt6 PyQt6-WebEngine requests playwright
+
+      - name: Package to Mac APP
+        # Mac 必须要加 --windowed 参数，这样才会生成漂亮的 .app 图形应用文件夹
+        run: |
+          pyinstaller --noconfirm --clean --windowed --onefile --name "SubtitleVideoPro" --collect-all playwright main.py
+
+      - name: Create DMG Installer
+        # 使用 create-dmg 工具，把 .app 封装成苹果用户最熟悉的 .dmg 安装包
+        run: |
+          brew install create-dmg
+          create-dmg \
+            --volname "SubtitleVideoPro" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --hide-extension "SubtitleVideoPro.app" \
+            --app-drop-link 425 120 \
+            "dist/SubtitleVideoPro-macOS.dmg" \
+            "dist/SubtitleVideoPro.app"
+
+      - name: Attest macOS DMG (生成安全证明)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: 'dist/SubtitleVideoPro-macOS.dmg'
+
+      - name: Upload macOS Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macOS-DMG
+          path: dist/SubtitleVideoPro-macOS.dmg
+
+  # ==================== 发货中心：统一收集并创建 Release ====================
+  release:
+    needs: [build-windows, build-macos] # 👑 关键：告诉发货中心，必须等这两个工人都干完活！
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true # 👑 把 Windows 和 Mac 的产物合并到同一个文件夹里
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/Subtitled-video-Pro.exe
+          tag_name: ${{ github.event.inputs.version || github.ref_name }}
+          name: Release ${{ github.event.inputs.version || github.ref_name }}
+          # 👑 同时把 .exe 和 .dmg 挂到展柜上
+          files: |
+            artifacts/SubtitleVideoPro-Windows.exe
+            artifacts/SubtitleVideoPro-macOS.dmg
           generate_release_notes: true
+          make_latest: true
