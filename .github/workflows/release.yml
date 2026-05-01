@@ -9,36 +9,24 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write    # 必须：用于签名
-      contents: write    # 必须：用于创建 Release
-      attestations: write # 必须：用于写入证明
-    
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      id-token: write
+      contents: write
+      attestations: write
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
-      - name: Install Build Tools
-        run: pip install build
-
-      - name: Build Package
-        run: python -m build
-
-      # 关键步骤：生成证明
-      # 注意：证明是绑定到 dist/ 目录下的具体文件的
-      - name: Generate Builders Attestation
+      - name: Build
+        run: |
+          pip install build
+          python -m build
+      - name: Attest
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: 'dist/*'
-
-      # 发布到 GitHub Release
-      # 此时上传的 dist/* 文件会带有 GitHub 认证的元数据
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*
-          generate_release_notes: true
