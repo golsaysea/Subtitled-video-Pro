@@ -9,9 +9,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write      # 必须：用于 OIDC 身份验证
+      id-token: write      # 必须：用于签名证明
       contents: write      # 必须：用于上传 Release
-      attestations: write   # 必须：用于生成证明[cite: 5]
+      attestations: write   # 必须：用于向 GitHub 写入证明数据[cite: 5]
 
     steps:
       - name: Checkout
@@ -23,16 +23,19 @@ jobs:
           python-version: '3.12'
 
       - name: Build Package
+        # 只要 pyproject.toml 在 main 分支根目录，这里就能打出包[cite: 5]
         run: |
           pip install build
-          python -m build  # 只要 pyproject.toml 在根目录就能成功[cite: 5]
+          python -m build
 
-      - name: Attest
+      - name: Attest Build
+        # 这是解决你“构件证明”红叉的核心步骤[cite: 5, 10]
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: 'dist/*'
 
       - name: Create Release
+        # 将生成的 .whl 文件挂载到 Release 页面
         uses: softprops/action-gh-release@v2
         with:
           files: |
