@@ -4,5 +4,5 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "Subtitled-video-Pro"
-version = "2.0.2"
+version = "2.0.5"
 description = "Professional video tool"
