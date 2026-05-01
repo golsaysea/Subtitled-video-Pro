@@ -3,23 +3,18 @@ name: Release Python Package
 on:
   push:
     tags:
-      - 'v*'  # 当你发布 v1.0.2 等标签时触发
-
-# 强制使用最新的 Node.js 环境以消除警告
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      - 'v*'
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    # 必须配置以下权限，否则“构建证明”无法写入
     permissions:
-      id-token: write      # 用于身份认证
-      contents: write      # 用于创建 Release 和上传文件
-      attestations: write   # 用于生成构建证明
+      id-token: write      # 必须：用于签名[cite: 5]
+      contents: write      # 必须：用于上传[cite: 5]
+      attestations: write   # 必须：用于写入证明[cite: 5]
 
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Python
@@ -27,26 +22,23 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install Build Tools
-        run: pip install build
+      - name: Build
+        run: |
+          pip install build
+          # 显式创建 dist 目录，防止工具链环境问题
+          mkdir -p dist
+          python -m build
 
-      - name: Build Package
-        # 这一步会生成 .whl 和 .tar.gz 文件到 dist 文件夹
-        run: python -m build
-
-      - name: Check Built Files
-        # 调试用：在日志中列出生成的文件，确保不是空的
-        run: ls -R dist/
-
-      - name: Generate Attestations
-        # 核心步骤：为 dist 目录下的所有构件生成证明
+      - name: Attest
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: 'dist/*'
 
-      - name: Create GitHub Release
-        # 将构建好的包上传到 Release 页面
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*
+          # 明确指定上传 dist 目录下的所有文件[cite: 4, 5]
+          files: |
+            dist/*.whl
+            dist/*.tar.gz
           generate_release_notes: true
