@@ -1,21 +1,20 @@
-name: Release Python Package
+name: Release Package
 
 on:
   push:
     tags:
       - 'v*'
 
-# 1. 解决你收到的 Node.js 20 警告：强制开启 Node.js 24 运行模式
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write      # 必须：用于签名证明
+      id-token: write      # 必须：用于盖章证明
       contents: write      # 必须：用于上传文件[cite: 5]
-      attestations: write   # 必须：用于写入证明[cite: 5]
+      attestations: write   # 必须：写入 GitHub 安全数据库[cite: 5]
 
     steps:
       - name: Checkout
@@ -26,14 +25,12 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Build Package
-        # 只要 pyproject.toml 在 main 分支的根目录，这里就不会再报错[cite: 5]
+      - name: Build
         run: |
           pip install build
-          python -m build
+          python -m build # 只要根目录有 pyproject.toml 这一步必成[cite: 5]
 
-      - name: Generate Attestation
-        # 这一步是让你的“构件证明”变绿的关键[cite: 5, 10]
+      - name: Attest
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: 'dist/*'
@@ -41,7 +38,6 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          # 确保上传生成的 .whl 和 .tar.gz 文件
           files: |
             dist/*.whl
             dist/*.tar.gz
