@@ -3,7 +3,7 @@ name: Build and Release EXE
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*'  # 👑 触发条件：只有当你推送类似 v1.0.0 的 tag 时，才会执行打包和发布
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -12,12 +12,12 @@ jobs:
   build-windows:
     runs-on: windows-latest  # 👑 关键：必须在 Windows 环境下才能打出 .exe
     permissions:
-      id-token: write      # 盖章证明必选[cite: 5]
-      contents: write      # 上传 Release 必选[cite: 5]
-      attestations: write   # 写入安全数据库必选[cite: 5]
+      id-token: write      # 盖章证明必选
+      contents: write      # 上传 Release 必选
+      attestations: write  # 写入安全数据库必选
 
     steps:
-      - name: Checkout
+      - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Setup Python
@@ -26,27 +26,29 @@ jobs:
           python-version: '3.12'
 
       - name: Install Dependencies
-        # 安装打包工具和你代码里的所有依赖[cite: 5]
+        # 👑 补全了你项目所需的全部核心依赖
+        # 你的代码中用到了 QWebEngineView，所以必须加上 PyQt6-WebEngine
         run: |
-          pip install pyinstaller PyQt6 requests playwright
-          # 如果你的项目还有其他依赖，请在这里继续添加
+          python -m pip install --upgrade pip
+          pip install pyinstaller PyQt6 PyQt6-WebEngine requests playwright
 
       - name: Package to EXE
-        # 使用 PyInstaller 将 main.py 封装为单文件 .exe[cite: 1]
+        # 👑 使用 PyInstaller 将 main.py 封装为单文件 .exe
         # --noconsole: 运行时不显示黑窗口
         # --onefile: 所有依赖打包进一个 exe
+        # --collect-all playwright: 强制收集 Playwright 的底层依赖，防止运行报错
         run: |
-          pyinstaller --noconsole --onefile --name "Subtitled-video-Pro" main.py
+          pyinstaller --noconsole --onefile --name "Subtitled-video-Pro" --collect-all playwright main.py
 
       - name: Attest EXE
-        # 给生成的 .exe 签发 GitHub 官方的“构建证明”
+        # 👑 给生成的 .exe 签发 GitHub 官方的“构建证明” (SLSA Provenance)
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: 'dist/Subtitled-video-Pro.exe'
 
       - name: Create Release
+        # 👑 自动创建 GitHub Release 并把生成的 exe 挂载上去
         uses: softprops/action-gh-release@v2
         with:
-          # 这一步会将 exe 文件挂载到你的 Release 页面
           files: dist/Subtitled-video-Pro.exe
           generate_release_notes: true
