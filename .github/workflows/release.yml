@@ -41,9 +41,17 @@ jobs:
         with:
           subject-path: 'dist/Subtitled-video-Pro.exe'
 
+      # 👑 新增：不管有没有 Tag，永远把打包好的 EXE 存到这次运行记录里，方便随时下载测试
+      - name: Upload EXE as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Subtitled-video-Pro-Windows
+          path: dist/Subtitled-video-Pro.exe
+
+      # 👑 修改：加了一个 if 判断。只有当你推送了 'v' 开头的 Tag 时，才会去创建正式 Release
       - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
-        # 当只有 push branch 触发，没有 tag 时，依然会自动创建一个 Release 来存放 EXE
         with:
           files: dist/Subtitled-video-Pro.exe
           generate_release_notes: true
