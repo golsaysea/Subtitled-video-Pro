@@ -1,4 +1,4 @@
-name: Release Package
+name: Build and Release EXE
 
 on:
   push:
@@ -9,12 +9,12 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
+  build-windows:
+    runs-on: windows-latest  # 👑 关键：必须在 Windows 环境下才能打出 .exe
     permissions:
-      id-token: write      # 必须：用于盖章证明
-      contents: write      # 必须：用于上传文件[cite: 5]
-      attestations: write   # 必须：写入 GitHub 安全数据库[cite: 5]
+      id-token: write      # 盖章证明必选[cite: 5]
+      contents: write      # 上传 Release 必选[cite: 5]
+      attestations: write   # 写入安全数据库必选[cite: 5]
 
     steps:
       - name: Checkout
@@ -25,20 +25,28 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Build
+      - name: Install Dependencies
+        # 安装打包工具和你代码里的所有依赖[cite: 5]
         run: |
-          pip install build
-          python -m build # 只要根目录有 pyproject.toml 这一步必成[cite: 5]
+          pip install pyinstaller PyQt6 requests playwright
+          # 如果你的项目还有其他依赖，请在这里继续添加
 
-      - name: Attest
+      - name: Package to EXE
+        # 使用 PyInstaller 将 main.py 封装为单文件 .exe[cite: 1]
+        # --noconsole: 运行时不显示黑窗口
+        # --onefile: 所有依赖打包进一个 exe
+        run: |
+          pyinstaller --noconsole --onefile --name "Subtitled-video-Pro" main.py
+
+      - name: Attest EXE
+        # 给生成的 .exe 签发 GitHub 官方的“构建证明”
         uses: actions/attest-build-provenance@v2
         with:
-          subject-path: 'dist/*'
+          subject-path: 'dist/Subtitled-video-Pro.exe'
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            dist/*.whl
-            dist/*.tar.gz
+          # 这一步会将 exe 文件挂载到你的 Release 页面
+          files: dist/Subtitled-video-Pro.exe
           generate_release_notes: true
