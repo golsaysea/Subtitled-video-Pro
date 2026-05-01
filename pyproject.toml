@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "Subtitled-video-Pro"
-version = "1.0.9"
+version = "1.1.0"
 description = "A professional video subtitling tool."
 readme = "README.md"
 requires-python = ">=3.12"
