@@ -9,9 +9,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write      # 必须：用于签名[cite: 5]
-      contents: write      # 必须：用于上传[cite: 5]
-      attestations: write   # 必须：用于写入证明[cite: 5]
+      id-token: write      # 必须：用于 OIDC 身份验证
+      contents: write      # 必须：用于上传 Release
+      attestations: write   # 必须：用于生成证明[cite: 5]
 
     steps:
       - name: Checkout
@@ -25,14 +25,7 @@ jobs:
       - name: Build Package
         run: |
           pip install build
-          python -m build  # 它会自动在根目录寻找 pyproject.toml    
-
-      - name: Build
-        run: |
-          pip install build
-          # 显式创建 dist 目录，防止工具链环境问题
-          mkdir -p dist
-          python -m build
+          python -m build  # 只要 pyproject.toml 在根目录就能成功[cite: 5]
 
       - name: Attest
         uses: actions/attest-build-provenance@v2
@@ -42,7 +35,6 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          # 明确指定上传 dist 目录下的所有文件[cite: 4, 5]
           files: |
             dist/*.whl
             dist/*.tar.gz
