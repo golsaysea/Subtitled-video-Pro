@@ -2,19 +2,21 @@ name: Build and Release EXE
 
 on:
   push:
+    branches: [ "main", "master" ] # 每次推送到主分支都会触发
     tags:
-      - 'v*'  # 👑 触发条件：只有当你推送类似 v1.0.0 的 tag 时，才会执行打包和发布
+      - 'v*'                     # 打版本号标签时也会触发
+  workflow_dispatch:             # 👑 关键：允许你在 GitHub 网页上直接点按钮运行！
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build-windows:
-    runs-on: windows-latest  # 👑 关键：必须在 Windows 环境下才能打出 .exe
+    runs-on: windows-latest
     permissions:
-      id-token: write      # 盖章证明必选
-      contents: write      # 上传 Release 必选
-      attestations: write  # 写入安全数据库必选
+      id-token: write
+      contents: write
+      attestations: write
 
     steps:
       - name: Checkout Code
@@ -26,29 +28,22 @@ jobs:
           python-version: '3.12'
 
       - name: Install Dependencies
-        # 👑 补全了你项目所需的全部核心依赖
-        # 你的代码中用到了 QWebEngineView，所以必须加上 PyQt6-WebEngine
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller PyQt6 PyQt6-WebEngine requests playwright
 
       - name: Package to EXE
-        # 👑 使用 PyInstaller 将 main.py 封装为单文件 .exe
-        # --noconsole: 运行时不显示黑窗口
-        # --onefile: 所有依赖打包进一个 exe
-        # --collect-all playwright: 强制收集 Playwright 的底层依赖，防止运行报错
         run: |
           pyinstaller --noconsole --onefile --name "Subtitled-video-Pro" --collect-all playwright main.py
 
       - name: Attest EXE
-        # 👑 给生成的 .exe 签发 GitHub 官方的“构建证明” (SLSA Provenance)
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: 'dist/Subtitled-video-Pro.exe'
 
       - name: Create Release
-        # 👑 自动创建 GitHub Release 并把生成的 exe 挂载上去
         uses: softprops/action-gh-release@v2
+        # 当只有 push branch 触发，没有 tag 时，依然会自动创建一个 Release 来存放 EXE
         with:
           files: dist/Subtitled-video-Pro.exe
           generate_release_notes: true
