@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local app state and credentials
+/settings.json
+/effects.json
+/MyWorkspace/
+/ElevenLabs_Config.json
+/ElevenLabs_*.csv
+*.log
+
+# Build output
+/build/
+/dist/
+/*.spec
+/release/
+
+# Keep checked-in web runtime builds, but ignore transient Node modules.
+web_tools/node_modules/
+web_tools/.vite/
+web_tools/*.log
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

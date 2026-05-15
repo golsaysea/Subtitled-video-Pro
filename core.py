@@ -17,8 +17,8 @@ except ImportError:
 
 CONFIG_FILE = "settings.json"
 EFFECTS_FILE = "effects.json"
-CLOUD_SECRET = "zdCp7M6mQaJFSr4qzUU5yVfsJDxaQzeZZtE2Ps4qbG1cAUU0zYfqNHRsIS1u0bdRBi4Ld1eu8OkXa7ZY3htClFuvwoEVvfh07xZSoy3uWDlpXWQfRBWMz7Q8"
-DEFAULT_SYNC_URL = "https://sub.golsaysea.workers.dev/"
+CLOUD_SECRET = os.environ.get("SUBTITLE_COMPOSER_CLOUD_SECRET", "").strip()
+DEFAULT_SYNC_URL = os.environ.get("SUBTITLE_COMPOSER_SYNC_URL", "").strip()
 FFMPEG_DOWNLOAD_URL = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
 
 def get_app_dir():
@@ -100,6 +100,7 @@ def auto_sync_cloud_data(on_complete=None):
     def _sync_task():
         try:
             sync_url = DEFAULT_SYNC_URL
+            cloud_secret = CLOUD_SECRET
             config_path = os.path.join(os.getcwd(), CONFIG_FILE)
             config_data = {}
             
@@ -107,12 +108,13 @@ def auto_sync_cloud_data(on_complete=None):
                 try:
                     with open(config_path, "r", encoding="utf-8") as f:
                         config_data = json.load(f)
-                        sync_url = config_data.get("sync_url", DEFAULT_SYNC_URL)
+                        sync_url = (config_data.get("sync_url") or DEFAULT_SYNC_URL).strip()
+                        cloud_secret = (config_data.get("cloud_secret") or cloud_secret).strip()
                 except: pass
 
-            if not sync_url: return
+            if not sync_url or not cloud_secret: return
 
-            headers = {"X-App-Auth": CLOUD_SECRET}
+            headers = {"X-App-Auth": cloud_secret}
             res = requests.get(sync_url, headers=headers, timeout=10, verify=False)
             if res.status_code != 200: return
                 

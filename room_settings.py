@@ -347,7 +347,17 @@ class SettingsView(QWidget):
 
     def _sync_worker_thread(self, url):
         try:
-            headers = {"X-App-Auth": CLOUD_SECRET}
+            cloud_secret = CLOUD_SECRET
+            if os.path.exists(CONFIG_FILE):
+                try:
+                    with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                        config = json.load(f)
+                    cloud_secret = (config.get("cloud_secret") or cloud_secret).strip()
+                except Exception:
+                    pass
+            if not cloud_secret:
+                raise Exception("未配置云端同步密钥。请设置环境变量 SUBTITLE_COMPOSER_CLOUD_SECRET，或在本地 settings.json 中添加 cloud_secret。")
+            headers = {"X-App-Auth": cloud_secret}
             res = requests.get(url, headers=headers, timeout=12, verify=False)
             if res.status_code == 401:
                 raise Exception("云端拒绝访问：密钥错误或 Workers 鉴权不通过。")

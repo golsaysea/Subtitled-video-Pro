@@ -1,0 +1,81 @@
+# Project License Compliance Report
+
+> Generated: 2026-05-15
+> Audit guide: https://tpscsm-docs.pages.dev/license-audit/
+> This report is for compliance reference only and is not legal advice.
+
+## Project License
+
+Project SPDX baseline: `GPL-3.0-only`
+
+Rationale: this codebase imports `PyQt6` and `PyQt6-WebEngine`. Their PyPI
+open-source distribution path is `GPL-3.0-only`, with a Riverbank commercial
+license available as an alternative. For a public GitHub release without a
+documented commercial PyQt entitlement, `GPL-3.0-only` is the compatible
+open-source baseline.
+
+The short project license notice is stored in `COPYING`. Before a public
+release, the project owner should confirm the copyright holder name and whether
+the repository should include the full GPL-3.0 license text.
+
+## Copyright License Compliance Conclusion
+
+Final assessment: compliant for open-source distribution if the repository and
+release artifacts are distributed under `GPL-3.0-only` and include source,
+license, and third-party notices.
+
+Important boundary: the same dependency set is not compatible with an MIT,
+Apache-2.0, or proprietary-only project license unless the project owner has and
+documents a valid Riverbank commercial license for PyQt/PyQt-WebEngine.
+
+## Distribution Obligations
+
+- Distribute the complete corresponding source for the released application.
+- Keep `GPL-3.0-only` project license notice visible in the repository and
+  release package.
+- Preserve third-party license notices for PyQt6, PyQt6-WebEngine, requests,
+  playwright, and any packaged browser/runtime data.
+- If FFmpeg GPL binaries are bundled, include FFmpeg notices and source-offer
+  information; if the app only downloads FFmpeg on demand, document that the
+  user obtains FFmpeg from the upstream provider.
+- Do not impose additional downstream restrictions that conflict with GPL-3.0.
+
+## Dependency License Summary
+
+| Category | Count | Result |
+| --- | ---: | --- |
+| Strong copyleft (`GPL-3.0-only`) | 2 | Compatible with GPL-3.0-only project baseline |
+| Permissive (`Apache-2.0`) | 2 | Compatible with GPL-3.0-only project baseline; preserve notices |
+| Unknown | 0 | None found |
+| Non-open-source | 0 | None found |
+
+## Compatibility Details
+
+| Dependency | Dependency License | Compatibility With Project GPL-3.0-only | Distribution Duty |
+| --- | --- | --- | --- |
+| PyQt6 | GPL-3.0-only or commercial | Compatible under GPL-3.0-only | Release project under GPL-3.0-only unless commercial PyQt license is used |
+| PyQt6-WebEngine | GPL-3.0-only or commercial | Compatible under GPL-3.0-only | Same PyQt commercial/GPL boundary; Riverbank states PyQt-WebEngine is not LGPL |
+| requests | Apache-2.0 | Compatible | Preserve Apache-2.0 license and notices |
+| playwright | Apache-2.0 | Compatible | Preserve Apache-2.0 license and notices; track bundled browser assets separately |
+
+## Third-Party License Notices
+
+### GPL-3.0-only
+
+- `PyQt6==6.11.0` — Riverbank Computing Limited.
+- `PyQt6-WebEngine==6.11.0` — Riverbank Computing Limited.
+
+### Apache-2.0
+
+- `requests==2.34.2` — Python Software Foundation / Requests maintainers.
+- `playwright==1.59.0` — Microsoft Corporation.
+
+## Risk Notes
+
+1. PyQt6 and PyQt6-WebEngine are the decisive licensing factors. A permissive
+   project license should not be used for public distribution unless commercial
+   PyQt licensing is documented.
+2. FFmpeg is currently fetched from a GPL build URL in `core.py`; avoid bundling
+   that binary without notices and source-offer handling.
+3. Re-run this audit whenever `requirements.txt`, `web_tools/package.json`, or
+   the FFmpeg distribution strategy changes.
