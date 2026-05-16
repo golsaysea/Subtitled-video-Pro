@@ -29,16 +29,10 @@ from PyQt6.QtCore import Qt, QSettings
 from PyQt6.QtGui import QAction
 
 from core import auto_sync_cloud_data
-<<<<<<< HEAD
 from font_assets import ensure_fonts_dir, register_bundled_fonts
 from project_io import load_or_create_default_project, update_room_state
 from workspace_config import get_active_workspace
 from room_project import PROJECT_HALL_THEMES, ProjectView
-=======
-from project_io import load_or_create_default_project, update_room_state
-from workspace_config import get_active_workspace
-from room_project import ProjectView
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 from room_edit import EditView
 from room_scroll import ScrollView
 from room_batch import BatchView
@@ -238,7 +232,6 @@ class SubtitledvideoPro(QMainWindow):
         self.btn_deliver.clicked.connect(lambda: self.switch_room(4))
         self.btn_settings.clicked.connect(lambda: self.switch_room(5))
 
-<<<<<<< HEAD
     def apply_chrome_theme(self, theme_key):
         colors = PROJECT_HALL_THEMES.get(theme_key, PROJECT_HALL_THEMES["dark_star"])
         self.current_theme_key = theme_key if theme_key in PROJECT_HALL_THEMES else "dark_star"
@@ -286,8 +279,6 @@ class SubtitledvideoPro(QMainWindow):
             if hasattr(room, "apply_theme"):
                 room.apply_theme(colors, self.current_theme_key)
 
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     def is_auto_save_enabled(self):
         return bool(self.auto_save_enabled)
 
@@ -419,10 +410,7 @@ class SubtitledvideoPro(QMainWindow):
         ]
         for room in self.rooms:
             self.stack.addWidget(room)
-<<<<<<< HEAD
         self.apply_chrome_theme(getattr(self.room_project, "project_theme", "dark_star"))
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
     def open_default_room(self):
         self.switch_room(0, initial=True)
@@ -497,11 +485,8 @@ class SubtitledvideoPro(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-<<<<<<< HEAD
     ensure_fonts_dir()
     register_bundled_fonts()
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     threading.Thread(target=auto_sync_cloud_data, daemon=True).start()
 
     workspace = get_active_workspace()

@@ -1,16 +1,10 @@
 # Third-Party Notices
 
-<<<<<<< HEAD
 Generated: 2026-05-16
 
 This file summarizes direct runtime dependencies and release-relevant
 components. See `LICENSE.LIST` for the direct dependency audit and
 `docs/DEPENDENCY_LICENSE_AUDIT.md` for the full release review.
-=======
-Generated: 2026-05-15
-
-This file summarizes direct runtime dependencies and release-relevant components. See `LICENSE.LIST` for the formal direct dependency audit.
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
 ## Direct Runtime Dependencies
 
@@ -25,7 +19,6 @@ This file summarizes direct runtime dependencies and release-relevant components
 
 | Component | License / Notice | Source | Notes |
 | --- | --- | --- | --- |
-<<<<<<< HEAD
 | Open font pack | OFL-1.1 or compatible open font licenses | `fonts/open/open_fonts_manifest.json` | 21 bundled font files; keep each font directory's `OFL.txt`, `LICENSE.txt`, or `LICENSE.md` with redistributed artifacts |
 | PyInstaller | GPL-2.0-or-later with bootloader exception; selected files Apache-2.0 | https://pyinstaller.org/en/stable/license.html | Used to produce Windows release artifacts |
 | FFmpeg BtbN GPL build | GPL/LGPL FFmpeg components depending on build variant | https://github.com/BtbN/FFmpeg-Builds | App can download FFmpeg on demand; do not bundle silently without notices/source-offer handling |
@@ -52,12 +45,3 @@ Font redistribution requirements:
 This repository is prepared for `GPL-3.0-only` open-source distribution because
 PyPI PyQt6/PyQt6-WebEngine require GPL-compatible distribution unless a
 commercial Riverbank license is documented.
-=======
-| PyInstaller | GPL-2.0-or-later with bootloader exception; selected files Apache-2.0 | https://pyinstaller.org/en/stable/license.html | Used to produce Windows release artifacts |
-| FFmpeg BtbN GPL build | GPL/LGPL FFmpeg components depending on build variant | https://github.com/BtbN/FFmpeg-Builds | App can download FFmpeg on demand; do not bundle silently without notices/source-offer handling |
-| Playwright Chromium browser | Chromium and bundled component licenses | https://playwright.dev/python/ | If bundled into the release artifact, keep browser notices under review |
-
-## Project License Baseline
-
-This repository is prepared for `GPL-3.0-only` open-source distribution because PyPI PyQt6/PyQt6-WebEngine require GPL-compatible distribution unless a commercial Riverbank license is documented.
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c

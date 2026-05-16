@@ -14,10 +14,7 @@
   --accent-2: #6ee7b7;
   --danger: #fb7185;
   --warn: #f8c15c;
-<<<<<<< HEAD
   --overlay: rgba(3, 6, 10, 0.68);
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
   --shadow: 0 20px 60px rgba(0, 0, 0, 0.32);
   --radius: 8px;
 }
@@ -62,13 +59,7 @@ button:disabled {
   grid-template-columns: 320px minmax(0, 1fr);
   height: 100%;
   min-width: 860px;
-<<<<<<< HEAD
   background: var(--bg);
-=======
-  background:
-    linear-gradient(145deg, rgba(78, 163, 255, 0.08), transparent 38%),
-    var(--bg);
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 }
 
 .sc-sidebar {
@@ -79,11 +70,7 @@ button:disabled {
   min-width: 0;
   overflow-y: auto;
   padding-bottom: 28px;
-<<<<<<< HEAD
   background: var(--panel);
-=======
-  background: rgba(24, 26, 31, 0.96);
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
   border-right: 1px solid var(--line);
 }
 
@@ -91,11 +78,7 @@ button:disabled {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   min-width: 0;
-<<<<<<< HEAD
   background: var(--bg);
-=======
-  background: rgba(16, 17, 19, 0.74);
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 }
 
 .sc-brand {
@@ -181,11 +164,7 @@ button:disabled {
 .sc-select:focus,
 .sc-textarea:focus {
   border-color: var(--accent);
-<<<<<<< HEAD
   background: var(--surface);
-=======
-  background: #0d1118;
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 }
 
 .sc-row {
@@ -212,11 +191,7 @@ button:disabled {
 
 .sc-button:hover {
   border-color: var(--line-strong);
-<<<<<<< HEAD
   background: var(--panel-2);
-=======
-  background: #303541;
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 }
 
 .sc-button:active {
@@ -326,11 +301,7 @@ button:disabled {
   justify-content: space-between;
   gap: 14px;
   padding: 14px 18px;
-<<<<<<< HEAD
   background: var(--panel);
-=======
-  background: rgba(24, 26, 31, 0.94);
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
   border-bottom: 1px solid var(--line);
 }
 
@@ -341,11 +312,7 @@ button:disabled {
 
 .sc-progress {
   height: 5px;
-<<<<<<< HEAD
   background: var(--field);
-=======
-  background: #0b0d10;
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
   border-top: 1px solid var(--line);
   overflow: hidden;
 }
@@ -364,11 +331,7 @@ button:disabled {
   display: none;
   place-items: center;
   padding: 28px;
-<<<<<<< HEAD
   background: var(--overlay);
-=======
-  background: rgba(3, 6, 10, 0.68);
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
   z-index: 1000;
 }
 

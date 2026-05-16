@@ -11,11 +11,7 @@ from difflib import SequenceMatcher
 from PyQt6.QtWidgets import QWidget, QVBoxLayout
 from PyQt6.QtCore import Qt, QObject, pyqtSlot
 
-<<<<<<< HEAD
 from core import get_ffmpeg_cmd, get_ffprobe_cmd
-=======
-from core import get_ffmpeg_cmd
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
 FAITH_WORDS = {"god", "jesus", "amen", "lord", "christ", "holy", "bible"}
 APOSTROPHES = {"'", "’", "‘", "`"}
@@ -454,7 +450,6 @@ def get_exact_duration(file_path):
     except:
         return 0.0
 
-<<<<<<< HEAD
 def get_stream_duration(file_path, stream_selector="v:0"):
     if not file_path or not os.path.exists(file_path):
         return 0.0
@@ -553,8 +548,6 @@ def _estimate_video_packet_duration(file_path):
         return 0.0
     return 0.0
 
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 def get_video_dimensions(file_path):
     if not file_path or not os.path.exists(file_path): return 1080, 1920
     try:
@@ -697,11 +690,8 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
     c_txt = style.get("color_txt", "#FFFFFF")
     c_hl = style.get("color_hl", "#FFFFFF")
     f_fam = style.get("font", "Arial")
-<<<<<<< HEAD
     f_weight = str(style.get("font_weight", "700") or "700")
     f_style = str(style.get("font_style", "normal") or "normal")
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
     size = int(style.get("size", 100))
     bg_mode = style.get("bg_mode", "none")
@@ -730,10 +720,7 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
     stroke_c = style.get("stroke_color", "#000000")
     stroke_o_w = style.get("stroke_o_width", 0)
     stroke_o_c = style.get("stroke_o_color", "#000000")
-<<<<<<< HEAD
     stroke_softness = max(0, min(100, int(style.get("stroke_softness", 0))))
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     sh_x = style.get("shadow_x", 5)
     sh_y = style.get("shadow_y", 5)
     sh_blur = style.get("shadow_blur", 0)
@@ -751,10 +738,7 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
     use_hl = style.get("use_hl", True)
     hl_glow = style.get("hl_glow", False)
     glow_size = int(style.get("glow_size", 20))
-<<<<<<< HEAD
     text_texture = style.get("text_texture", "none")
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
     anim_type = style.get("anim_type", "pop")
     font_motion = style.get("font_motion", "none")
@@ -805,7 +789,6 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
     whole_sub_progress = clip_progress * 100 if bg_mode == "sweep" else 0
 
     content_indices = [i for i, ww in enumerate(words) if _clean_word_text(ww)]
-<<<<<<< HEAD
     content_center = (content_indices[0] + content_indices[-1]) / 2.0 if content_indices else (len(words) - 1) / 2.0
     if align in ("free_mix", "left_mix"):
         align_seed_text = "".join(_clean_word_text(words[i]) for i in content_indices) if content_indices else str(sub.get("text", ""))
@@ -826,8 +809,6 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
             layout_mode = ("axis_stack", "reel_stack", "random_focus")[mix_seed % 3]
         elif count == 4:
             layout_mode = ("side_steps", "random_focus", "reel_stack")[mix_seed % 3]
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     emphasis_idx = set()
     small_idx = set()
     current_word_idx = None
@@ -861,11 +842,7 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
             score += 1.5
         return score
 
-<<<<<<< HEAD
     if layout_mode in ("contrast", "triple", "reel_stack", "random_focus", "axis_stack", "quote_stack") and content_indices:
-=======
-    if layout_mode in ("contrast", "triple") and content_indices:
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         variant = layout_variant
         if variant == "auto":
             m = len(content_indices) % 3
@@ -883,11 +860,7 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
             if not emphasis_idx:
                 emphasis_idx.add(content_indices[max(0, len(content_indices) // 2)])
             small_idx.update([i for i in content_indices if i not in emphasis_idx])
-<<<<<<< HEAD
         elif layout_mode == "triple":
-=======
-        else:
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
             if variant == "small-big-small":
                 emphasis_idx.update(ranked[:1] or [content_indices[min(1, len(content_indices) - 1)]])
             elif variant == "big-small-mix":
@@ -898,7 +871,6 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
                 if len(content_indices) > 5:
                     emphasis_idx.add(content_indices[0])
             small_idx.update([i for i in content_indices if i not in emphasis_idx])
-<<<<<<< HEAD
         elif layout_mode == "reel_stack":
             emphasis_idx.add(content_indices[0])
             if len(content_indices) > 1:
@@ -970,8 +942,6 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
 
     def _layout_breaks_before(word_idx):
         return word_idx in layout_break_before
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
     html_words_fg = []
     html_words_bg = []
@@ -984,7 +954,6 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
         if not clean_txt:
             if has_newline:
                 html_words_fg.append("<br>")
-<<<<<<< HEAD
                 if bg_mode in ("tape", "block", "sweep"):
                     html_words_bg.append("<br>")
             continue
@@ -999,15 +968,6 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
         if not inserted_break and _layout_breaks_before(idx):
             html_words_fg.append("<br>")
             if bg_mode in ("tape", "block", "sweep"):
-=======
-                if bg_mode in ("tape", "block"):
-                    html_words_bg.append("<br>")
-            continue
-
-        if has_newline and idx > 0:
-            html_words_fg.append("<br>")
-            if bg_mode in ("tape", "block"):
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                 html_words_bg.append("<br>")
 
         clean_txt = _style_display_text(clean_txt, style)
@@ -1024,18 +984,12 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
         current_opacity = inactive_alpha
         current_translate_em = 0.0
         current_translate_x_em = 0.0
-<<<<<<< HEAD
         current_rotate_x_deg = 0.0
         current_rotate_y_deg = 0.0
         current_filter_css = "filter: none;"
         current_clip_css = ""
         word_reveal_pct = 100.0
         current_letter_extra = 0.0
-=======
-        current_filter_css = "filter: none;"
-        current_clip_css = ""
-        word_reveal_pct = 100.0
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
         if is_active:
             current_opacity = 1.0
@@ -1054,7 +1008,6 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
                 current_translate_em += (1.0 - p) * 0.16
                 current_scale *= 0.96 + 0.04 * p
                 current_filter_css = f"filter: blur({vw(8 * (1.0 - p))});"
-<<<<<<< HEAD
             elif anim_type == "grow_in" and t >= 0:
                 p = ease_out_cubic(t / pop_speed)
                 current_opacity = p
@@ -1077,8 +1030,6 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
                 current_translate_x_em += spread * 0.18 * (1.0 - p)
                 current_scale *= 0.90 + 0.10 * p
                 current_filter_css = f"filter: blur({vw(4 * (1.0 - p))});"
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
             elif anim_type == "word_wipe" and t >= 0:
                 word_reveal_pct = ease_out_cubic(t / pop_speed) * 100.0
         elif anim_type == "blur_fade":
@@ -1086,7 +1037,6 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
             current_translate_em += 0.16
             current_scale *= 0.96
             current_filter_css = f"filter: blur({vw(8)});"
-<<<<<<< HEAD
         elif anim_type == "grow_in":
             current_opacity = 0.0
             current_translate_em += 0.08
@@ -1106,8 +1056,6 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
             current_translate_x_em += spread * 0.18
             current_scale *= 0.90
             current_filter_css = f"filter: blur({vw(4)});"
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         elif anim_type == "word_wipe":
             current_opacity = 1.0
             word_reveal_pct = 0.0
@@ -1119,7 +1067,6 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
             current_clip_css = f"-webkit-clip-path: inset(0 {hidden_pct:.3f}% 0 0); clip-path: inset(0 {hidden_pct:.3f}% 0 0);"
 
         shadows = []
-<<<<<<< HEAD
         stroke_r, stroke_g, stroke_b = hex_to_rgb(stroke_c)
         if stroke_o_w > 0:
             total_w = stroke_w + stroke_o_w
@@ -1138,14 +1085,6 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
                 sy = soft_spread * math.sin(math.radians(angle))
                 shadows.append(f"{vw(sx)} {vw(sy)} {vw(soft_blur)} rgba({stroke_r}, {stroke_g}, {stroke_b}, {soft_alpha:.2f})")
             shadows.append(f"0 0 {vw(soft_blur * 1.35)} rgba({stroke_r}, {stroke_g}, {stroke_b}, {max(0.18, soft_alpha - 0.12):.2f})")
-=======
-        if stroke_o_w > 0:
-            total_w = stroke_w + stroke_o_w
-            for angle in [0, 45, 90, 135, 180, 225, 270, 315]:
-                sx = total_w * math.cos(math.radians(angle))
-                sy = total_w * math.sin(math.radians(angle))
-                shadows.append(f"{vw(sx)} {vw(sy)} 0 {stroke_o_c}")
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         if sh_x != 0 or sh_y != 0 or sh_blur != 0:
             sr, sg, sb = hex_to_rgb(sh_c)
             shadows.append(f"{vw(sh_x)} {vw(sh_y)} {vw(sh_blur)} rgba({sr}, {sg}, {sb}, {sh_a})")
@@ -1154,22 +1093,14 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
 
         text_shadow_css = f"text-shadow: {', '.join(shadows)};" if shadows else "text-shadow: none;"
         
-<<<<<<< HEAD
         # Keep a crisp inner outline and feather the outside through text-shadow.
         hard_stroke_w = stroke_w * (1.0 - 0.42 * (stroke_softness / 100.0))
         stroke_css = f"-webkit-text-stroke: {vw(max(0.0, hard_stroke_w))} {stroke_c}; paint-order: stroke fill; stroke-linejoin: round; stroke-linecap: round;" if stroke_w > 0 else ""
-=======
-        # 👑 新增平滑边缘
-        stroke_css = f"-webkit-text-stroke: {vw(stroke_w)} {stroke_c}; paint-order: stroke fill; stroke-linejoin: round; stroke-linecap: round;" if stroke_w > 0 else ""
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
         layout_font_scale = 1.0
         per_word_translate = 0.0
         word_margin_right = ws_vw
-<<<<<<< HEAD
         layout_row_i, layout_pos_i, layout_row_len = layout_row_lookup.get(idx, (0, 0, 0))
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         if layout_mode in ("contrast", "triple"):
             if idx in emphasis_idx:
                 layout_font_scale = emphasis_scale / 100.0
@@ -1181,7 +1112,6 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
                 word_margin_right = vw(max(0, word_spacing * 0.35 + 0.6))
             else:
                 word_margin_right = vw(max(0, word_spacing * 0.45 + 1.0))
-<<<<<<< HEAD
         elif layout_mode == "reel_stack":
             if idx in emphasis_idx:
                 layout_font_scale = max(emphasis_scale / 100.0, 1.42 if layout_row_i == 0 else 1.62)
@@ -1228,15 +1158,12 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
                 layout_font_scale = 0.72 if layout_row_len >= 3 else 0.82
                 per_word_translate = 0.025
                 word_margin_right = vw(max(0, word_spacing * 0.18 + 0.52))
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
         current_translate_em += per_word_translate
         if font_motion == "wave" and word_started:
             wave = math.sin(current_time * 5.2 + idx * 0.72)
             current_translate_em += wave * 0.055
             current_scale *= 1.0 + max(0.0, wave) * 0.018
-<<<<<<< HEAD
         elif font_motion == "breathe" and word_started:
             breath = (math.sin(current_time * 1.8 + idx * 0.12) + 1.0) / 2.0
             current_scale *= 1.0 + breath * 0.055
@@ -1264,8 +1191,6 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
             pulse = max(0.0, math.sin(current_time * 8.0 + idx * 0.55))
             current_scale *= 1.0 + pulse * 0.11
             current_translate_em -= pulse * 0.025
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         if current_word_idx is not None and hl_motion in ("pop", "push"):
             distance = idx - current_word_idx
             active_word = words[current_word_idx]
@@ -1283,32 +1208,22 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
                 current_translate_x_em += (0.060 + 0.025 * local_p) * (1 if distance > 0 else -1)
         if stable_word_boxes:
             current_translate_x_em = 0.0
-<<<<<<< HEAD
             if font_motion in ("wave", "drift"):
-=======
-            if font_motion == "wave":
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                 current_translate_em = per_word_translate
             if anim_type == "pop":
                 current_scale = min(current_scale, 1.025)
 
         word_base = (
             f"font-size: {layout_font_scale:.3f}em; "
-<<<<<<< HEAD
             f"transform: perspective(720px) translate({current_translate_x_em:.3f}em, {current_translate_em:.3f}em) scale({current_scale:.3f}) rotateY({current_rotate_y_deg:.3f}deg) rotateX({current_rotate_x_deg:.3f}deg); "
             f"transform-origin: center center; transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); "
             f"letter-spacing: calc({ls_vw} + {vw(current_letter_extra)}); "
-=======
-            f"transform: translate({current_translate_x_em:.3f}em, {current_translate_em:.3f}em) scale({current_scale:.3f}); "
-            f"transform-origin: center center; transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); "
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
             f"margin-right: {word_margin_right}; white-space: nowrap; overflow-wrap: normal; word-break: keep-all; "
             f"break-inside: avoid; page-break-inside: avoid; box-sizing: border-box; line-height: inherit; "
             f"vertical-align: baseline; will-change: transform, opacity; backface-visibility: hidden; "
             f"{current_filter_css} {current_clip_css}"
         )
 
-<<<<<<< HEAD
         fill_color = c_hl if is_current else c_txt
         texture_css = ""
         texture_profiles = {
@@ -1346,9 +1261,6 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
             )
 
         word_css_fg = f"display: inline-block; color: {fill_color}; opacity: {current_opacity:.3f}; {text_shadow_css} {stroke_css} {texture_css} {word_base}"
-=======
-        word_css_fg = f"display: inline-block; color: {c_hl if is_current else c_txt}; opacity: {current_opacity:.3f}; {text_shadow_css} {stroke_css} {word_base}"
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         word_css_bg = f"display: inline-block; color: transparent; -webkit-text-fill-color: transparent; text-shadow: none; -webkit-text-stroke: transparent; opacity: {current_opacity:.3f}; {word_base}"
 
         if bg_mode == "tape":
@@ -1365,24 +1277,15 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
 
         if idx < len(words) - 1:
             next_raw = str(words[idx + 1].get("text") or words[idx + 1].get("word") or "")
-<<<<<<< HEAD
             if "\n" not in next_raw and not _layout_breaks_before(idx + 1):
                 spacer = "<span style='display:inline-block; width:0.14em;'></span>" if layout_mode in ("contrast", "triple", "reel_stack", "random_focus", "side_steps", "axis_stack", "quote_stack") else " "
                 html_words_fg.append(spacer)
                 if bg_mode in ("tape", "block", "sweep"):
                     html_words_bg.append(spacer if layout_mode in ("contrast", "triple", "reel_stack", "random_focus", "side_steps", "axis_stack", "quote_stack") else " ")
-=======
-            if "\n" not in next_raw:
-                spacer = "<span style='display:inline-block; width:0.14em;'></span>" if layout_mode in ("contrast", "triple") else " "
-                html_words_fg.append(spacer)
-                if bg_mode in ("tape", "block"):
-                    html_words_bg.append(spacer if layout_mode in ("contrast", "triple") else " ")
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
     inner_html_fg = "".join(html_words_fg)
     inner_html_bg = "".join(html_words_bg)
 
-<<<<<<< HEAD
     inner_transform_parts = []
     inner_extra_css = ""
     if anim_type == "roll_up":
@@ -1439,27 +1342,15 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
     inner_transform = ""
     if inner_transform_parts:
         inner_transform = f"transform: {' '.join(inner_transform_parts)}; transform-origin: center center; {inner_extra_css}"
-=======
-    inner_transform = ""
-    if anim_type == "roll_up":
-        y_offset = (1.0 - clip_progress * 2) * 50
-        inner_transform = f"transform: translateY({y_offset}vh);"
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
     # 👑 新增平滑边缘及抗锯齿
     base_wrapper_css = f"""
         font-family: '{f_fam}', sans-serif;
         font-size: {size_vw};
-<<<<<<< HEAD
         font-weight: {f_weight};
         font-style: {f_style};
         letter-spacing: {ls_vw};
         word-spacing: {('0vw' if layout_mode in ('contrast', 'triple', 'reel_stack', 'random_focus', 'side_steps', 'axis_stack', 'quote_stack') else ws_vw)};
-=======
-        font-weight: bold;
-        letter-spacing: {ls_vw};
-        word-spacing: {('0vw' if layout_mode in ('contrast', 'triple') else ws_vw)};
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         text-transform: none;
         box-sizing: border-box;
         -webkit-font-smoothing: antialiased;

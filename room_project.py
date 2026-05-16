@@ -8,7 +8,6 @@ import html
 import re
 
 from PyQt6.QtWidgets import (
-<<<<<<< HEAD
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTreeWidget, QTreeWidgetItem,
     QMessageBox, QFrame, QScrollArea, QGridLayout, QInputDialog, QGraphicsDropShadowEffect, QSplitter,
     QFileDialog, QDialog, QComboBox, QTextEdit, QLineEdit, QDialogButtonBox, QFormLayout,
@@ -20,16 +19,6 @@ from PyQt6.QtGui import QPixmap, QCursor, QFont, QIcon, QDesktopServices, QDrag
 from project_io import create_reel, load_project, get_project_folders, get_project_folder_paths, get_reels_in_folder, save_project, sync_project_assets_to_project_dir
 from font_assets import font_package_entries_for_families
 from font_registry import is_safe_font
-=======
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QListWidget, QListWidgetItem,
-    QMessageBox, QFrame, QScrollArea, QGridLayout, QInputDialog, QGraphicsDropShadowEffect, QSplitter,
-    QFileDialog, QDialog, QComboBox, QTextEdit, QLineEdit, QDialogButtonBox, QFormLayout
-)
-from PyQt6.QtCore import Qt, pyqtSignal, QSize, QUrl
-from PyQt6.QtGui import QPixmap, QCursor, QFont, QIcon, QDesktopServices
-
-from project_io import create_reel, load_project, get_project_folders, get_reels_in_folder, sync_project_assets_to_project_dir
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 from workspace_config import (
     CLOUD_LINK_MODE_COLLAB,
     CLOUD_LINK_MODE_COPY,
@@ -50,7 +39,6 @@ from cloud_workspace import (
     set_share_config,
     update_manifest_from_workspace,
 )
-<<<<<<< HEAD
 from project_audit import format_scan_report, scan_folder, scan_to_json, scan_workspace
 
 
@@ -99,8 +87,6 @@ PROJECT_HALL_THEMES = {
         "star": "#91a889",
     },
 }
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
 
 GOOGLE_DRIVE_HINT_NAMES = (
@@ -191,11 +177,7 @@ def _scan_workspace_summary(workspace):
 
     for folder_name in folders:
         folder_path = os.path.join(workspace, folder_name)
-<<<<<<< HEAD
         for reel_path in get_reels_in_folder(folder_path, recursive=True):
-=======
-        for reel_path in get_reels_in_folder(folder_path):
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
             reel_count += 1
             try:
                 project = load_project(reel_path)
@@ -224,7 +206,6 @@ def _scan_workspace_summary(workspace):
     }
 
 
-<<<<<<< HEAD
 class ProjectFolderListWidget(QTreeWidget):
     files_dropped = pyqtSignal(list, str)
 
@@ -272,8 +253,6 @@ class ProjectFolderListWidget(QTreeWidget):
         super().dropEvent(event)
 
 
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 class CloudJoinWizard(QDialog):
     def __init__(self, workspace_cfg, parent=None):
         super().__init__(parent)
@@ -649,21 +628,15 @@ class CloudShareDialog(QDialog):
 class ReelCard(QFrame):
     clicked = pyqtSignal(str) 
     delete_clicked = pyqtSignal(str)
-<<<<<<< HEAD
     rename_clicked = pyqtSignal(str)
     duplicate_clicked = pyqtSignal(str)
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
     def __init__(self, project_data, parent=None):
         super().__init__(parent)
         self.project_data = project_data
         self.scomp_path = project_data.get("project_path", "")
-<<<<<<< HEAD
         self._drag_start_pos = None
         self._drag_started = False
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         self.init_ui()
 
     def init_ui(self):
@@ -686,14 +659,9 @@ class ReelCard(QFrame):
         cover_rel = self.project_data.get("cover_img", "")
         p_dir = self.project_data.get("project_dir", "")
         cover_path = os.path.join(p_dir, cover_rel) if p_dir and cover_rel else ""
-<<<<<<< HEAD
         self.has_cover = bool(cover_path and os.path.exists(cover_path))
         
         if self.has_cover:
-=======
-        
-        if cover_path and os.path.exists(cover_path):
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
             pixmap = QPixmap(cover_path)
             self.lbl_cover.setPixmap(pixmap.scaled(200, 210, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation))
         else:
@@ -707,7 +675,6 @@ class ReelCard(QFrame):
 
         title_row = QHBoxLayout()
         p_name = self.project_data.get("project_name", "未命名Reel")
-<<<<<<< HEAD
         self.lbl_title = QLabel(p_name)
         self.lbl_title.setToolTip(p_name)
         self.lbl_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #cdd6f4;")
@@ -723,17 +690,12 @@ class ReelCard(QFrame):
         btn_copy.setToolTip("复制 Reel")
         btn_copy.setStyleSheet("background: transparent; border: none; color: #a6e3a1; font-size: 14px;")
         btn_copy.clicked.connect(self._on_duplicate_clicked)
-=======
-        lbl_title = QLabel(p_name)
-        lbl_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #cdd6f4;")
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         
         btn_del = QPushButton("🗑️")
         btn_del.setFixedSize(24, 24)
         btn_del.setStyleSheet("background: transparent; border: none; color: #f38ba8; font-size: 14px;")
         btn_del.clicked.connect(self._on_del_clicked)
 
-<<<<<<< HEAD
         title_row.addWidget(self.lbl_title, stretch=1)
         title_row.addWidget(btn_rename)
         title_row.addWidget(btn_copy)
@@ -810,25 +772,10 @@ class ReelCard(QFrame):
             self.duplicate_clicked.emit(self.scomp_path)
         elif action == act_delete:
             self.delete_clicked.emit(self.scomp_path)
-=======
-        title_row.addWidget(lbl_title, stretch=1); title_row.addWidget(btn_del)
-        info_layout.addLayout(title_row)
-
-        lbl_date = QLabel(self.project_data.get("updated_at", "").split(" ")[0])
-        lbl_date.setStyleSheet("font-size: 12px; color: #a6adc8;")
-        info_layout.addWidget(lbl_date)
-
-        layout.addWidget(info_frame)
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton: self.clicked.emit(self.scomp_path)
-        super().mousePressEvent(event)
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         
     def _on_del_clicked(self, event):
         self.delete_clicked.emit(self.scomp_path)
 
-<<<<<<< HEAD
     def _on_rename_clicked(self):
         self.rename_clicked.emit(self.scomp_path)
 
@@ -938,8 +885,6 @@ class ReelFolderCard(QFrame):
             self.delete_clicked.emit(self.folder_path)
 
 
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 class ProjectView(QWidget):
     def __init__(self, project_data=None, parent=None):
         super().__init__(parent)
@@ -948,16 +893,12 @@ class ProjectView(QWidget):
         self.workspace = get_active_workspace()
         if not os.path.exists(self.workspace): os.makedirs(self.workspace)
         self.current_folder = ""
-<<<<<<< HEAD
         self.current_reel_dir = ""
         self.active_lock_project_path = ""
         self.folder_filter = ""
         self.reel_filter = ""
         self.project_theme = self.load_project_hall_theme()
         self._refreshing_folder_list = False
-=======
-        self.active_lock_project_path = ""
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         self.setAcceptDrops(True)
         self.init_ui()
         self.refresh_workspace_controls()
@@ -969,15 +910,9 @@ class ProjectView(QWidget):
         main_layout.setContentsMargins(20, 20, 20, 20)
 
         header = QHBoxLayout()
-<<<<<<< HEAD
         self.title_label = QLabel("🎬 Reels 视频工程大厅")
         self.title_label.setStyleSheet("font-size: 28px; font-weight: 900; color: #cdd6f4;")
         header.addWidget(self.title_label)
-=======
-        title = QLabel("🎬 Reels 视频工程大厅")
-        title.setStyleSheet("font-size: 28px; font-weight: 900; color: #cdd6f4;")
-        header.addWidget(title)
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         
         self.lbl_current = QLabel("当前加载: 无")
         self.lbl_current.setStyleSheet("color: #a6e3a1; font-size: 14px; font-weight: bold; background: #1e1e2e; padding: 5px 15px; border-radius: 15px; margin-left: 20px;")
@@ -1009,7 +944,6 @@ class ProjectView(QWidget):
         header.addWidget(self.btn_cloud_join)
         header.addWidget(self.btn_pick_cloud_workspace)
         header.addWidget(self.btn_cloud_share)
-<<<<<<< HEAD
 
         self.theme_combo = QComboBox()
         self.theme_combo.setToolTip("切换全局界面主题")
@@ -1019,8 +953,6 @@ class ProjectView(QWidget):
         self.theme_combo.setCurrentIndex(theme_idx if theme_idx >= 0 else 0)
         self.theme_combo.currentIndexChanged.connect(self.on_project_theme_changed)
         header.addWidget(self.theme_combo)
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         header.addStretch()
         main_layout.addLayout(header)
 
@@ -1028,7 +960,6 @@ class ProjectView(QWidget):
         splitter.setStyleSheet("QSplitter::handle { background-color: #313244; width: 2px; }")
         
         # 👑 左侧：项目文件夹列表
-<<<<<<< HEAD
         self.splitter = splitter
         self.left_panel = QFrame()
         self.left_panel.setStyleSheet("background-color: #181825; border-radius: 10px;")
@@ -1038,16 +969,6 @@ class ProjectView(QWidget):
         self.list_title = QLabel("📁 项目列表")
         self.list_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #89b4fa;")
         left_header.addWidget(self.list_title)
-=======
-        left_panel = QFrame()
-        left_panel.setStyleSheet("background-color: #181825; border-radius: 10px;")
-        left_layout = QVBoxLayout(left_panel)
-        
-        left_header = QHBoxLayout()
-        list_title = QLabel("📁 项目列表")
-        list_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #89b4fa;")
-        left_header.addWidget(list_title)
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         
         # 👑 新增：左侧操作按钮
         btn_new_folder = QPushButton("➕"); btn_new_folder.setFixedSize(30, 30)
@@ -1058,13 +979,10 @@ class ProjectView(QWidget):
         btn_rename_folder.setStyleSheet("background-color: #313244; color: white; border-radius: 15px;")
         btn_rename_folder.setToolTip("重命名选中项目"); btn_rename_folder.clicked.connect(self.rename_current_folder)
 
-<<<<<<< HEAD
         btn_copy_folder = QPushButton("⧉"); btn_copy_folder.setFixedSize(30, 30)
         btn_copy_folder.setStyleSheet("background-color: #313244; color: #a6e3a1; border-radius: 15px;")
         btn_copy_folder.setToolTip("复制当前项目文件夹"); btn_copy_folder.clicked.connect(self.copy_current_folder)
 
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         btn_delete_folder = QPushButton("🗑️"); btn_delete_folder.setFixedSize(30, 30)
         btn_delete_folder.setStyleSheet("background-color: #313244; color: #f38ba8; border-radius: 15px;")
         btn_delete_folder.setToolTip("删除选中项目"); btn_delete_folder.clicked.connect(self.delete_current_folder)
@@ -1083,15 +1001,11 @@ class ProjectView(QWidget):
 
         left_header.addWidget(btn_new_folder)
         left_header.addWidget(btn_rename_folder)
-<<<<<<< HEAD
         left_header.addWidget(btn_copy_folder)
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         left_header.addWidget(btn_delete_folder)
         left_header.addWidget(btn_import_folder)
         left_header.addWidget(btn_package_folder)
         left_header.addWidget(btn_batch_create)
-<<<<<<< HEAD
         self.folder_action_buttons = [
             btn_new_folder,
             btn_rename_folder,
@@ -1146,35 +1060,11 @@ class ProjectView(QWidget):
         self.right_panel = QFrame()
         self.right_panel.setStyleSheet("background-color: transparent;")
         right_layout = QVBoxLayout(self.right_panel)
-=======
-        left_layout.addLayout(left_header)
-
-        drop_hint = QLabel("拖入含 .scomp 的项目文件夹可导入\n📦 打包后可上传 Google Drive 共享")
-        drop_hint.setStyleSheet("color: #a6adc8; background-color: #11111b; border: 1px dashed #45475a; border-radius: 8px; padding: 10px; font-size: 12px;")
-        drop_hint.setWordWrap(True)
-        left_layout.addWidget(drop_hint)
-
-        self.folder_list = QListWidget()
-        self.folder_list.setStyleSheet("""
-            QListWidget { background: transparent; border: none; outline: none; }
-            QListWidget::item { padding: 12px; margin: 4px 0; border-radius: 8px; font-size: 14px; color: #a6adc8; font-weight: bold; }
-            QListWidget::item:hover { background-color: #313244; }
-            QListWidget::item:selected { background-color: #89b4fa; color: #11111b; }
-        """)
-        self.folder_list.itemClicked.connect(self.on_folder_selected)
-        left_layout.addWidget(self.folder_list)
-        
-        # 👑 右侧：Reels 分页网格
-        right_panel = QFrame()
-        right_panel.setStyleSheet("background-color: transparent;")
-        right_layout = QVBoxLayout(right_panel)
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         
         self.lbl_folder_title = QLabel("请在左侧选择一个项目...")
         self.lbl_folder_title.setStyleSheet("font-size: 20px; font-weight: bold; color: #f9e2af; padding-bottom: 10px;")
         right_layout.addWidget(self.lbl_folder_title)
 
-<<<<<<< HEAD
         tools_row = QHBoxLayout()
         self.reel_search = QLineEdit()
         self.reel_search.setPlaceholderText("搜索 Reel 名称 / 文件名")
@@ -1209,16 +1099,10 @@ class ProjectView(QWidget):
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setStyleSheet("QScrollArea { border: none; background: transparent; }")
-=======
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         self.grid_widget = QWidget()
         self.grid_layout = QGridLayout(self.grid_widget)
         self.grid_layout.setSpacing(25)
         self.grid_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
-<<<<<<< HEAD
         self.scroll_area.setWidget(self.grid_widget)
         right_layout.addWidget(self.scroll_area, stretch=1)
 
@@ -1227,22 +1111,12 @@ class ProjectView(QWidget):
         splitter.setSizes([300, 1000])
         main_layout.addWidget(splitter, stretch=1)
         self.apply_project_theme()
-=======
-        scroll.setWidget(self.grid_widget)
-        right_layout.addWidget(scroll, stretch=1)
-
-        splitter.addWidget(left_panel)
-        splitter.addWidget(right_panel)
-        splitter.setSizes([300, 1000])
-        main_layout.addWidget(splitter, stretch=1)
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
     def parent_window(self):
         p = self.parent()
         while p is not None and not hasattr(p, "switch_room"): p = p.parent()
         return p
 
-<<<<<<< HEAD
     def load_project_hall_theme(self):
         try:
             settings_path = os.path.join(os.getcwd(), "settings.json")
@@ -1556,8 +1430,6 @@ class ProjectView(QWidget):
         except Exception:
             self.lbl_workspace_summary.setText("工作区摘要暂不可用")
 
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     def open_cloud_join_wizard(self):
         previous_project_dir = self.project_data.get("project_dir", "") if isinstance(self.project_data, dict) else ""
         dialog = CloudJoinWizard(get_workspace_config(), self)
@@ -1718,10 +1590,7 @@ class ProjectView(QWidget):
         self.workspace = get_active_workspace()
         os.makedirs(self.workspace, exist_ok=True)
         self.current_folder = ""
-<<<<<<< HEAD
         self.current_reel_dir = ""
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         self.active_lock_project_path = ""
         self.lbl_folder_title.setText("请在左侧选择一个项目...")
         if self.is_cloud_workspace():
@@ -1735,7 +1604,6 @@ class ProjectView(QWidget):
         if p_name: self.lbl_current.setText(f"当前加载 Reel: {p_name}")
         else: self.lbl_current.setText("当前加载 Reel: 无")
 
-<<<<<<< HEAD
     def _folder_rel_from_item(self, item):
         if not item:
             return ""
@@ -1781,8 +1649,6 @@ class ProjectView(QWidget):
         nodes[rel_path] = item
         return item
 
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     def refresh_folders(self, select_name=None):
         if self.is_cloud_workspace():
             try:
@@ -1790,7 +1656,6 @@ class ProjectView(QWidget):
                 update_manifest_from_workspace(self.workspace)
             except Exception:
                 pass
-<<<<<<< HEAD
         self._refreshing_folder_list = True
         self.folder_list.blockSignals(True)
         self.folder_list.clear()
@@ -1901,34 +1766,6 @@ class ProjectView(QWidget):
             if not os.path.exists(path):
                 os.makedirs(path)
                 self.refresh_folders(select_name=safe_rel)
-=======
-        self.folder_list.clear()
-        folders = get_project_folders(self.workspace)
-        for f in folders:
-            self.folder_list.addItem(f)
-            
-        if folders:
-            # 尝试选中指定的名称
-            if select_name:
-                items = self.folder_list.findItems(select_name, Qt.MatchFlag.MatchExactly)
-                if items:
-                    self.folder_list.setCurrentItem(items[0])
-                    self.on_folder_selected(items[0])
-                    return
-            
-            # 否则默认选中第一个
-            self.folder_list.setCurrentRow(0)
-            self.on_folder_selected(self.folder_list.item(0))
-
-    def create_new_folder(self):
-        name, ok = QInputDialog.getText(self, "新建项目", "请输入新项目文件夹的名称：")
-        if ok and name.strip():
-            safe_name = "".join(c for c in name.strip() if c not in r'\/:*?"<>|')
-            path = os.path.join(self.workspace, safe_name)
-            if not os.path.exists(path):
-                os.makedirs(path)
-                self.refresh_folders(select_name=safe_name)
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
             else:
                 QMessageBox.warning(self, "提示", "项目文件夹已存在！")
 
@@ -1936,7 +1773,6 @@ class ProjectView(QWidget):
         safe_name = "".join(c for c in (name or "").strip() if c not in r'\/:*?"<>|')
         return safe_name or "导入项目"
 
-<<<<<<< HEAD
     def _safe_relative_folder(self, value):
         parts = [self._safe_folder_name(part) for part in re.split(r"[\\/]+", value or "") if part.strip()]
         return os.path.join(*parts) if parts else self._safe_folder_name(value)
@@ -1961,8 +1797,6 @@ class ProjectView(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "新建失败", str(e))
 
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     def _unique_workspace_folder(self, base_name):
         safe_name = self._safe_folder_name(base_name)
         target = os.path.join(self.workspace, safe_name)
@@ -1972,7 +1806,6 @@ class ProjectView(QWidget):
             n += 1
         return target
 
-<<<<<<< HEAD
     def _unique_reel_path(self, folder_path, base_name):
         safe_name = "".join(c for c in (base_name or "").strip() if c not in r'\/:*?"<>|').strip() or "Reel"
         target = os.path.join(folder_path, f"{safe_name}.scomp")
@@ -1985,11 +1818,6 @@ class ProjectView(QWidget):
     def _has_reel_files(self, folder_path):
         try:
             return bool(get_reels_in_folder(folder_path, recursive=True))
-=======
-    def _has_reel_files(self, folder_path):
-        try:
-            return any(name.lower().endswith(".scomp") for name in os.listdir(folder_path))
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         except Exception:
             return False
 
@@ -2003,11 +1831,7 @@ class ProjectView(QWidget):
         missing = []
         if not self.is_cloud_workspace():
             return copied, missing
-<<<<<<< HEAD
         for reel_path in get_reels_in_folder(folder_path, recursive=True):
-=======
-        for reel_path in get_reels_in_folder(folder_path):
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
             try:
                 project = load_project(reel_path)
                 _, report = sync_project_assets_to_project_dir(project)
@@ -2047,7 +1871,6 @@ class ProjectView(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "导入失败", str(e))
 
-<<<<<<< HEAD
     def _rewrite_copied_folder_project_paths(self, source_folder, target_folder):
         source_abs = os.path.abspath(source_folder)
         target_abs = os.path.abspath(target_folder)
@@ -2207,8 +2030,6 @@ class ProjectView(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "重命名失败", str(e))
 
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     def package_current_folder(self):
         if not self.current_folder or not os.path.isdir(self.current_folder):
             QMessageBox.warning(self, "提示", "请先选择一个项目文件夹。")
@@ -2224,11 +2045,7 @@ class ProjectView(QWidget):
 
         try:
             self._zip_project_folder(self.current_folder, zip_path)
-<<<<<<< HEAD
             QMessageBox.information(self, "打包完成", f"工程包已生成：\n{zip_path}\n\n包内已附带 subtitle_composer_audit.txt / .json，方便接收方先检查缺素材和字体授权状态。")
-=======
-            QMessageBox.information(self, "打包完成", f"工程包已生成：\n{zip_path}\n\n这个文件可以上传到 Google Drive / 共享云盘，其他人下载解压后可拖回工程大厅。")
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         except Exception as e:
             QMessageBox.critical(self, "打包失败", str(e))
 
@@ -2246,7 +2063,6 @@ class ProjectView(QWidget):
                     rel_path = os.path.relpath(file_path, folder_path)
                     arc_name = os.path.join(root_name, rel_path)
                     zf.write(file_path, arc_name)
-<<<<<<< HEAD
             try:
                 audit_report = scan_folder(folder_path, workspace=self.workspace)
                 zf.writestr(os.path.join(root_name, "subtitle_composer_audit.json").replace("\\", "/"), scan_to_json(audit_report))
@@ -2261,8 +2077,6 @@ class ProjectView(QWidget):
                     zf.write(file_path, os.path.join(root_name, arc_rel).replace("\\", "/"))
             except Exception:
                 pass
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
     def dragEnterEvent(self, event):
         urls = event.mimeData().urls() if event.mimeData().hasUrls() else []
@@ -2287,7 +2101,6 @@ class ProjectView(QWidget):
                 return
         super().dropEvent(event)
 
-<<<<<<< HEAD
     def rename_folder_by_name(self, old_name, new_name, show_dialogs=True):
         old_name = str(old_name or "").strip()
         safe_name = self._safe_folder_name(new_name)
@@ -2322,46 +2135,16 @@ class ProjectView(QWidget):
                 QMessageBox.critical(self, "重命名失败", str(e))
             return ""
 
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     # 👑 新增：重命名项目
     def rename_current_folder(self):
         if not self.current_folder: return
         old_name = os.path.basename(self.current_folder)
-<<<<<<< HEAD
         old_rel = os.path.relpath(self.current_folder, self.workspace)
         new_name, ok = QInputDialog.getText(self, "重命名项目", "请输入新的项目名称：", text=old_name)
         if ok and new_name.strip() and new_name.strip() != old_name:
             renamed = self.rename_folder_by_name(old_rel, new_name, show_dialogs=True)
             if renamed:
                 self.refresh_folders(select_name=renamed)
-=======
-        new_name, ok = QInputDialog.getText(self, "重命名项目", "请输入新的项目名称：", text=old_name)
-        if ok and new_name.strip() and new_name.strip() != old_name:
-            safe_name = "".join(c for c in new_name.strip() if c not in r'\/:*?"<>|')
-            new_path = os.path.join(self.workspace, safe_name)
-            if os.path.exists(new_path):
-                QMessageBox.warning(self, "提示", "该项目名称已存在！")
-                return
-            try:
-                if self.active_lock_project_path and os.path.abspath(self.active_lock_project_path).startswith(os.path.abspath(self.current_folder) + os.sep):
-                    self.release_active_cloud_lock()
-                os.rename(self.current_folder, new_path)
-                
-                # 如果正在加载的 Reel 刚好在这个文件夹里，修复它的内部路径映射
-                if self.project_data and self.project_data.get("project_dir", "") == self.current_folder:
-                    old_scomp = self.project_data.get("project_path")
-                    new_scomp = old_scomp.replace(self.current_folder, new_path)
-                    if os.path.exists(new_scomp):
-                        self.project_data = load_project(new_scomp)
-                        self.sync_current_project_to_main()
-                        self.sync_current_project_label()
-
-                self.current_folder = new_path
-                self.refresh_folders(select_name=safe_name)
-            except Exception as e:
-                QMessageBox.critical(self, "重命名失败", str(e))
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
     # 👑 新增：删除项目
     def delete_current_folder(self):
@@ -2381,10 +2164,7 @@ class ProjectView(QWidget):
                     self.sync_current_project_to_main()
                 
                 self.current_folder = ""
-<<<<<<< HEAD
                 self.current_reel_dir = ""
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                 self.lbl_folder_title.setText("请在左侧选择一个项目...")
                 self.refresh_folders()
             except Exception as e:
@@ -2392,7 +2172,6 @@ class ProjectView(QWidget):
 
     def on_folder_selected(self, item):
         if not item: return
-<<<<<<< HEAD
         rel_path = self._folder_rel_from_item(item)
         self.current_folder = os.path.join(self.workspace, rel_path)
         self.current_reel_dir = self.current_folder
@@ -2569,19 +2348,12 @@ class ProjectView(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "移动 Reel 失败", str(e))
 
-=======
-        self.current_folder = os.path.join(self.workspace, item.text())
-        self.lbl_folder_title.setText(f"📁 {item.text()} 下的 Reels")
-        self.refresh_reels_grid()
-
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     def refresh_reels_grid(self):
         for i in reversed(range(self.grid_layout.count())): 
             widget = self.grid_layout.itemAt(i).widget()
             if widget: widget.deleteLater()
 
         if not self.current_folder or not os.path.exists(self.current_folder): 
-<<<<<<< HEAD
             if hasattr(self, "lbl_reel_summary"):
                 self.lbl_reel_summary.setText("未选择项目文件夹")
             return
@@ -2637,29 +2409,18 @@ class ProjectView(QWidget):
             up_layout.addWidget(up_lbl)
             up_card.mousePressEvent = lambda e: self.open_reel_root() if e.button() == Qt.MouseButton.LeftButton else None
             add_grid_card(up_card)
-=======
-            return
-        
-        reels_paths = get_reels_in_folder(self.current_folder)
-        col_count = 5; row, col = 0, 0
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
         # 新建 Reel 卡片
         new_card = QFrame()
         new_card.setFixedSize(200, 280)
-<<<<<<< HEAD
         new_card.setStyleSheet(
             f"QFrame {{ background-color: transparent; border: 2px dashed {c['border']}; border-radius: 12px; }}"
             f"QFrame:hover {{ border-color: {c['accent_2']}; background-color: {c['hint']}; }}"
         )
-=======
-        new_card.setStyleSheet("QFrame { background-color: transparent; border: 2px dashed #45475a; border-radius: 12px; } QFrame:hover { border-color: #a6e3a1; background-color: #1e1e2e; }")
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         new_card.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         new_layout = QVBoxLayout(new_card)
         new_lbl = QLabel("➕\n新建 Reel")
         new_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-<<<<<<< HEAD
         new_lbl.setStyleSheet(f"color: {c['accent_2']}; font-size: 20px; font-weight: bold; border: none;")
         new_layout.addWidget(new_lbl)
         new_card.mousePressEvent = lambda e: self.create_new_reel() if e.button() == Qt.MouseButton.LeftButton else None
@@ -2687,23 +2448,10 @@ class ProjectView(QWidget):
             f"QFrame {{ background-color: transparent; border: 2px dashed {c['accent']}; border-radius: 12px; }}"
             f"QFrame:hover {{ border-color: {c['warn']}; background-color: {c['hint']}; }}"
         )
-=======
-        new_lbl.setStyleSheet("color: #a6e3a1; font-size: 20px; font-weight: bold; border: none;")
-        new_layout.addWidget(new_lbl)
-        new_card.mousePressEvent = lambda e: self.create_new_reel() if e.button() == Qt.MouseButton.LeftButton else None
-        
-        self.grid_layout.addWidget(new_card, row, col)
-        col += 1
-
-        batch_card = QFrame()
-        batch_card.setFixedSize(200, 280)
-        batch_card.setStyleSheet("QFrame { background-color: transparent; border: 2px dashed #b4befe; border-radius: 12px; } QFrame:hover { border-color: #f9e2af; background-color: #1e1e2e; }")
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         batch_card.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         batch_layout = QVBoxLayout(batch_card)
         batch_lbl = QLabel("🧩\n批量创建 Reel")
         batch_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-<<<<<<< HEAD
         batch_lbl.setStyleSheet(f"color: {c['accent']}; font-size: 20px; font-weight: bold; border: none;")
         batch_layout.addWidget(batch_lbl)
         batch_card.mousePressEvent = lambda e: self.open_batch_project_builder() if e.button() == Qt.MouseButton.LeftButton else None
@@ -2729,43 +2477,17 @@ class ProjectView(QWidget):
                 card.rename_clicked.connect(self.rename_reel)
                 card.duplicate_clicked.connect(self.duplicate_reel)
                 add_grid_card(card)
-=======
-        batch_lbl.setStyleSheet("color: #b4befe; font-size: 20px; font-weight: bold; border: none;")
-        batch_layout.addWidget(batch_lbl)
-        batch_card.mousePressEvent = lambda e: self.open_batch_project_builder() if e.button() == Qt.MouseButton.LeftButton else None
-
-        self.grid_layout.addWidget(batch_card, row, col)
-        col += 1
-
-        for path in reels_paths:
-            try:
-                p_data = load_project(path)
-                card = ReelCard(p_data)
-                card.clicked.connect(self.load_and_enter_project)
-                card.delete_clicked.connect(self.delete_reel)
-                
-                self.grid_layout.addWidget(card, row, col)
-                col += 1
-                if col >= col_count: col = 0; row += 1
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
             except Exception: pass
 
     def create_new_reel(self):
         if not self.current_folder: return
-<<<<<<< HEAD
         target_dir = self.current_reel_dir if self.current_reel_dir and os.path.isdir(self.current_reel_dir) else self.current_folder
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         if self.is_cloud_workspace() and not self.ensure_cloud_identity():
             return
         name, ok = QInputDialog.getText(self, "新建 Reel", "给你的新 Reel 起个名字：")
         if ok and name.strip():
             try:
-<<<<<<< HEAD
                 self.project_data = create_reel(target_dir, name.strip(), "edit_room")
-=======
-                self.project_data = create_reel(self.current_folder, name.strip(), "edit_room")
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                 project_path = self.project_data.get("project_path", "")
                 if self.is_cloud_workspace() and project_path and not self.prepare_cloud_project_lock(project_path):
                     return
@@ -2778,12 +2500,8 @@ class ProjectView(QWidget):
                 QMessageBox.critical(self, "创建失败", str(e))
 
     def open_batch_project_builder(self):
-<<<<<<< HEAD
         target_dir = self.current_reel_dir if self.current_reel_dir and os.path.isdir(self.current_reel_dir) else self.current_folder
         if not target_dir or not os.path.isdir(target_dir):
-=======
-        if not self.current_folder or not os.path.isdir(self.current_folder):
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
             QMessageBox.warning(self, "请选择工程", "请先在左侧选择一个工程文件夹，或先新建一个工程。")
             return
         parent = self.parent_window()
@@ -2792,11 +2510,7 @@ class ProjectView(QWidget):
             return
         if self.is_cloud_workspace() and not self.ensure_cloud_identity():
             return
-<<<<<<< HEAD
         parent.room_batch.prepare_project_builder(target_dir, os.path.basename(target_dir))
-=======
-        parent.room_batch.prepare_project_builder(self.current_folder, os.path.basename(self.current_folder))
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         parent.switch_room(3)
 
     def load_and_enter_project(self, path):
@@ -2828,10 +2542,7 @@ class ProjectView(QWidget):
                 os.remove(path)
                 cover_path = path.replace(".scomp", "_cover.jpg")
                 if os.path.exists(cover_path): os.remove(cover_path)
-<<<<<<< HEAD
                 self.refresh_workspace_summary()
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                 self.refresh_reels_grid()
                 
                 # 如果删除的刚好是当前加载的，则清空引用

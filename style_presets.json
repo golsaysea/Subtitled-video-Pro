@@ -1,11 +1,7 @@
 {
   "Reels-逐个大小出字-55": {
     "size": 72,
-<<<<<<< HEAD
     "font": "Noto Sans SC",
-=======
-    "font": "Segoe UI",
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     "color_txt": "#FFFFFF",
     "color_hl": "#fff701",
     "bg_mode": "none",
@@ -69,11 +65,7 @@
   },
   "Reels-逐个大小出字-45": {
     "size": 45,
-<<<<<<< HEAD
     "font": "Noto Sans SC",
-=======
-    "font": "Segoe UI",
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     "color_txt": "#FFFFFF",
     "color_hl": "#fbff00",
     "bg_mode": "tape",
@@ -137,11 +129,7 @@
   },
   "Reels-黑色大底框+红色动画": {
     "size": 45,
-<<<<<<< HEAD
     "font": "Noto Sans SC",
-=======
-    "font": "Segoe UI",
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     "color_txt": "#FFFFFF",
     "color_hl": "#ffffff",
     "bg_mode": "full_frame",
@@ -205,11 +193,7 @@
   },
   "Reels-黑色底框+红色动画": {
     "size": 55,
-<<<<<<< HEAD
     "font": "Noto Sans SC",
-=======
-    "font": "Segoe UI",
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     "color_txt": "#FFFFFF",
     "color_hl": "#ffffff",
     "bg_mode": "tape",
@@ -273,11 +257,7 @@
   },
   "Reels-逐个出字+红色动画": {
     "size": 58,
-<<<<<<< HEAD
     "font": "Noto Sans SC",
-=======
-    "font": "Segoe UI",
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     "color_txt": "#FFFFFF",
     "color_hl": "#f0f000",
     "bg_mode": "tape",
@@ -341,11 +321,7 @@
   },
   "Reels-极简纯文+电光青高亮": {
     "size": 56,
-<<<<<<< HEAD
     "font": "Noto Sans SC",
-=======
-    "font": "Segoe UI Emoji",
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     "color_txt": "#F0F0F0",
     "color_hl": "#00FFFF",
     "bg_mode": "none",
@@ -409,11 +385,7 @@
   },
   "Reels-重金大字+强对比排版": {
     "size": 68,
-<<<<<<< HEAD
     "font": "Noto Sans SC",
-=======
-    "font": "Impact",
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     "color_txt": "#FFFFFF",
     "color_hl": "#FFD700",
     "bg_mode": "none",
@@ -477,11 +449,7 @@
   },
   "Reels-蓝底白字+动感回弹": {
     "size": 48,
-<<<<<<< HEAD
     "font": "Noto Sans SC",
-=======
-    "font": "Segoe UI",
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     "color_txt": "#FFFFFF",
     "color_hl": "#FFFFFF",
     "bg_mode": "tape",
@@ -545,11 +513,7 @@
   },
   "Rells-逐个出字大小-爆贴": {
     "size": 72,
-<<<<<<< HEAD
     "font": "Noto Sans SC",
-=======
-    "font": "Segoe UI",
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     "color_txt": "#FFFFFF",
     "color_hl": "#fff701",
     "bg_mode": "none",
@@ -613,11 +577,7 @@
   },
   "Rells-逐个出字大小对比": {
     "size": 105,
-<<<<<<< HEAD
     "font": "Noto Sans SC",
-=======
-    "font": "Segoe UI",
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     "color_txt": "#FFFFFF",
     "color_hl": "#fff701",
     "bg_mode": "none",
@@ -681,11 +641,7 @@
   },
   "0501": {
     "size": 105,
-<<<<<<< HEAD
     "font": "Noto Sans SC",
-=======
-    "font": "Segoe UI",
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     "color_txt": "#FFFFFF",
     "color_hl": "#fff701",
     "bg_mode": "none",
@@ -749,11 +705,7 @@
   },
   "0501-2": {
     "size": 40,
-<<<<<<< HEAD
     "font": "Noto Sans SC",
-=======
-    "font": "Segoe UI",
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     "color_txt": "#FFFFFF",
     "color_hl": "#fbff00",
     "bg_mode": "tape",
@@ -817,11 +769,7 @@
   },
   "署名": {
     "size": 18,
-<<<<<<< HEAD
     "font": "Noto Sans SC",
-=======
-    "font": "Segoe UI",
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     "color_txt": "#ffffff",
     "color_hl": "#ffffff",
     "bg_mode": "tape",
@@ -885,11 +833,7 @@
   },
   "大小加淡入": {
     "size": 105,
-<<<<<<< HEAD
     "font": "Noto Sans SC",
-=======
-    "font": "Segoe UI",
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     "color_txt": "#FFFFFF",
     "color_hl": "#fff701",
     "bg_mode": "none",
@@ -953,11 +897,7 @@
   },
   "绿色底部": {
     "rotation": 0,
-<<<<<<< HEAD
     "font": "Noto Sans SC",
-=======
-    "font": "Segoe UI",
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     "size": 63,
     "letter_spacing": 0,
     "word_spacing": 0,
@@ -1010,11 +950,7 @@
   },
   "大小对比128": {
     "size": 128,
-<<<<<<< HEAD
     "font": "Noto Sans SC",
-=======
-    "font": "Segoe UI",
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     "color_txt": "#FFFFFF",
     "color_hl": "#fff701",
     "bg_mode": "none",
@@ -1082,11 +1018,7 @@
   },
   "0513-爆贴模糊出字": {
     "size": 42,
-<<<<<<< HEAD
     "font": "Noto Sans SC",
-=======
-    "font": "Segoe UI",
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     "color_txt": "#FFFFFF",
     "color_hl": "#fff701",
     "bg_mode": "none",
@@ -1154,11 +1086,7 @@
   },
   "蓝色底和绿色条框+正常大小写": {
     "size": 35,
-<<<<<<< HEAD
     "font": "Noto Sans SC",
-=======
-    "font": "Segoe UI",
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     "color_txt": "#FFFFFF",
     "color_hl": "#b40000",
     "bg_mode": "tape",
@@ -1226,11 +1154,7 @@
   },
   "0513-快快蓝色底": {
     "size": 35,
-<<<<<<< HEAD
     "font": "Noto Sans SC",
-=======
-    "font": "Segoe UI",
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     "color_txt": "#FFFFFF",
     "color_hl": "#b40000",
     "bg_mode": "tape",
@@ -1299,11 +1223,7 @@
   },
   "0514-江梨蓝色跳动": {
     "size": 35,
-<<<<<<< HEAD
     "font": "Noto Sans SC",
-=======
-    "font": "Segoe UI",
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     "color_txt": "#FFFFFF",
     "color_hl": "#ffffff",
     "bg_mode": "tape",
@@ -1369,7 +1289,6 @@
     "shine_en": true,
     "typography_mode": "contrast",
     "typography_variant": "mbs"
-<<<<<<< HEAD
   },
   "0515-爆款001": {
     "size": 68,
@@ -1729,7 +1648,5 @@
     "shine_en": true,
     "typography_mode": "contrast",
     "typography_variant": "mbs"
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
   }
 }

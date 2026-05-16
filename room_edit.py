@@ -22,18 +22,13 @@ from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEngineSettings
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput, QVideoSink, QVideoFrame
 from PyQt6.QtCore import Qt, QUrl, QTimer, pyqtSlot, pyqtSignal, QLocale, QEvent, QObject, QSize
-<<<<<<< HEAD
 from PyQt6.QtGui import QPainter, QPixmap, QKeySequence, QShortcut, QIcon, QFontDatabase
-=======
-from PyQt6.QtGui import QPainter, QPixmap, QKeySequence, QShortcut, QIcon
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 from PyQt6.QtWebChannel import QWebChannel
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtCore import QRectF
 
 from timeline_engine import TimelineHeader, AdvancedTimeline
 from core import get_ffmpeg_cmd, get_ffprobe_cmd, get_app_dir, FFMPEG_DOWNLOAD_URL, download_file_with_progress
-<<<<<<< HEAD
 from app_theme import apply_tinted_styles
 from ui_components import (hex_to_rgb, get_exact_duration, get_video_dimensions,
                            AspectRatioContainer, render_subtitle_html,
@@ -52,13 +47,6 @@ from font_registry import (
     is_safe_font,
     safe_font_keys,
 )
-=======
-from ui_components import (hex_to_rgb, get_exact_duration, get_video_dimensions,
-                           AspectRatioContainer, render_subtitle_html,
-                           rebalance_subtitle_layout, tokenize_display_text,
-                           normalize_word_timestamps, align_reference_text_to_timestamps)
-from project_io import copy_media_to_project_assets, sync_project_assets_to_project_dir, update_room_state
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
 CACHE_FILE = os.path.join(tempfile.gettempdir(), "sh_v8_project_cache.json")
 PRESETS_FILE = os.path.join(os.getcwd(), "style_presets.json") 
@@ -287,7 +275,6 @@ class EditView(QWidget):
         self.history_ptr = -1
         
         self.default_style = {
-<<<<<<< HEAD
             "size": 100, "font": "Noto Sans SC", "font_weight": "700", "font_style": "normal", "color_txt": "#FFFFFF", "color_hl": "#FFFFFF",
             "bg_mode": "none", "bg_color": "#000000", "bg_alpha": 80, "bg_radius": 15, "bg_padding": 20,
             "hl_bg_color": "#FF0050", "hl_bg_alpha": 100, "hl_bg_radius": 8, "hl_bg_padding": 8, 
@@ -296,15 +283,6 @@ class EditView(QWidget):
             "line_height": 1.1, "text_dir": "ltr", "use_hl": True, "hl_glow": False, "glow_size": 20,
             "anim_type": "pop", "font_motion": "none", "hl_motion": "stable", "pop_speed": 0.18, "pop_bounce": 128, "inactive_alpha": 100, 
             "text_texture": "none",
-=======
-            "size": 100, "font": "Segoe UI", "color_txt": "#FFFFFF", "color_hl": "#FFFFFF",
-            "bg_mode": "none", "bg_color": "#000000", "bg_alpha": 80, "bg_radius": 15, "bg_padding": 20,
-            "hl_bg_color": "#FF0050", "hl_bg_alpha": 100, "hl_bg_radius": 8, "hl_bg_padding": 8, 
-            "stroke_width": 4, "stroke_color": "#000000", "stroke_o_width": 0, "stroke_o_color": "#000000", 
-            "shadow_x": 5, "shadow_y": 5, "shadow_blur": 0, "shadow_color": "#000000", "shadow_alpha": 100,
-            "line_height": 1.1, "text_dir": "ltr", "use_hl": True, "hl_glow": False, "glow_size": 20,
-            "anim_type": "pop", "font_motion": "none", "hl_motion": "stable", "pop_speed": 0.18, "pop_bounce": 128, "inactive_alpha": 100, 
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
             "text_transform": "capitalize", "text_align": "center", "letter_spacing": 0, "word_spacing": 0,
             "layout_mode": "standard", "layout_variant": "auto", "box_layout": "fixed", "emphasis_scale": 145,
             "box_width": 74.0, "box_height": 0.0, "max_lines": 2,
@@ -318,10 +296,7 @@ class EditView(QWidget):
             "resolution": "原画检测 (自动跟随)", "v_scale": 100, "v_volume": 100, "a_volume": 100,
             "chunk_mode": "双行大段 (约10字，智能折行)",
             "timing_mode": "J Cut (字幕稍后收尾)",
-<<<<<<< HEAD
             "fill_subtitle_gaps": True,
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
             "custom_text": "", # 👑 新增：用于保存用户文案到工程
             "default_pos_x": 0.0,
             "default_pos_y": 25.0,
@@ -332,10 +307,7 @@ class EditView(QWidget):
         self.zoom_factor = 50.0; self.active_subs_cache = set(); self.last_render_hash = None
         self.v_wave_pixmap = None; self.a_wave_pixmap = None; self.video_thumbs = [] 
         self.proj_width = 1080; self.proj_height = 1920
-<<<<<<< HEAD
         self.safe_font_only = True
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         self.project_autosave_timer = QTimer(self)
         self.project_autosave_timer.setSingleShot(True)
         self.project_autosave_timer.timeout.connect(self.flush_project_autosave)
@@ -408,11 +380,7 @@ class EditView(QWidget):
         chunk_row = QHBoxLayout()
         chunk_row.addWidget(QLabel("✂️ 断句模式:", styleSheet="color: #89b4fa; font-weight: bold;"))
         self.chunk_mode = QComboBox()
-<<<<<<< HEAD
         self.chunk_mode.addItems(["短句快速 (1-3字)", "智能重点短句 (3-4词为主)", "自然短句 (1-4词)", "双词节奏 (2词/句)", "三词短句 (3词/句)", "四词短句 (4词/句)", "双行大段 (约10字，智能折行)", "单字轰炸 (1字/句)"])
-=======
-        self.chunk_mode.addItems(["短句快速 (1-3字)", "双行大段 (约10字，智能折行)", "单字轰炸 (1字/句)"])
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         self.chunk_mode.setStyleSheet("background-color: #313244; color: white; padding: 5px; border-radius: 4px;")
         chunk_row.addWidget(self.chunk_mode, stretch=1)
         self.chunk_mode.currentTextChanged.connect(self._on_chunk_mode_change)
@@ -427,15 +395,12 @@ class EditView(QWidget):
         self.timing_mode.currentTextChanged.connect(self._on_timing_mode_change)
         left_layout.addLayout(timing_row)
 
-<<<<<<< HEAD
         self.chk_fill_gaps = QCheckBox("填空时间：用前一句补空白")
         self.chk_fill_gaps.setChecked(True)
         self.chk_fill_gaps.setStyleSheet("color: #a6e3a1; font-weight: bold; margin-top: 2px;")
         self.chk_fill_gaps.stateChanged.connect(self._on_fill_gap_change)
         left_layout.addWidget(self.chk_fill_gaps)
 
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         self.btn_layout_audit = QPushButton("🧭 检查重叠并整理排版")
         self.btn_layout_audit.setFixedHeight(36)
         self.btn_layout_audit.setStyleSheet("background-color: #89b4fa; color: #11111b; font-weight: bold; border-radius: 5px;")
@@ -578,7 +543,6 @@ class EditView(QWidget):
         page_typo = QWidget(); page_typo_layout = QVBoxLayout(page_typo); page_typo_layout.setSpacing(10)
         sec_typo, typo_layout = create_section_frame("🔤 字体样式与高级排版 (Typography)", "#a6e3a1")
         self.font_category_combo = QComboBox(); self.font_category_combo.addItems(["全部字体", "中文优先", "拉丁/英文字体", "等宽字体"]); self.font_category_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.font_category_combo.currentTextChanged.connect(self._set_font_filter); typo_layout.addWidget(self.font_category_combo)
-<<<<<<< HEAD
         self.font_category_combo.clear()
         self.font_category_combo.addItems(["全部字体", "商用安全/开源", "系统/待复核", "中文优先", "拉丁/英文字体", "等宽字体", "无衬线", "衬线", "手写/花体", "装饰/标题"])
         font_safe_row = QHBoxLayout()
@@ -613,10 +577,6 @@ class EditView(QWidget):
         self.lbl_font_license.setWordWrap(True)
         self.lbl_font_license.setStyleSheet("color: #a6adc8; font-size: 12px;")
         typo_layout.addWidget(self.lbl_font_license)
-=======
-        self.font_var = QFontComboBox(); self.font_var.setStyleSheet("background-color: #313244; color: white; padding: 6px; border-radius: 5px;"); self.font_var.currentFontChanged.connect(self._on_style_change); self.font_var.currentFontChanged.connect(self._update_font_preview)
-        typo_layout.addWidget(self.font_var)
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         self.font_preview_input = QLineEdit("Text")
         self.font_preview_input.setPlaceholderText("输入要预览的字，比如 Text")
         self.font_preview_input.setStyleSheet("background-color: #11111b; color: #cdd6f4; border: 1px solid #313244; border-radius: 6px; padding: 6px 8px;")
@@ -629,24 +589,15 @@ class EditView(QWidget):
         self.font_preview_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.font_preview_label.setStyleSheet("background-color: #11111b; border: 1px dashed #45475a; border-radius: 8px; color: #ffffff; padding: 12px;")
         typo_layout.addWidget(self.font_preview_label)
-<<<<<<< HEAD
         self.layout_mode_combo = QComboBox(); self.layout_mode_combo.addItems(["标准排版", "智能图文排版", "混合自然排版", "大小对比排版", "三层模板排版", "前后大小叙事排版", "随机重点排版", "左右排开排版", "中轴排比排版"]); self.layout_mode_combo.setStyleSheet("background-color: #313244; padding: 5px; font-weight: bold;"); self.layout_mode_combo.currentTextChanged.connect(self._on_style_change); typo_layout.addWidget(self.layout_mode_combo)
         self.layout_variant_combo = QComboBox(); self.layout_variant_combo.addItems(["自动变化", "小-大-小", "大-小-混排", "混排-大-小", "中轴结尾分两边", "中轴 1-2-3 排"]); self.layout_variant_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.layout_variant_combo.currentTextChanged.connect(self._on_style_change); typo_layout.addWidget(self.layout_variant_combo)
-=======
-        self.layout_mode_combo = QComboBox(); self.layout_mode_combo.addItems(["标准排版", "大小对比排版", "三层模板排版"]); self.layout_mode_combo.setStyleSheet("background-color: #313244; padding: 5px; font-weight: bold;"); self.layout_mode_combo.currentTextChanged.connect(self._on_style_change); typo_layout.addWidget(self.layout_mode_combo)
-        self.layout_variant_combo = QComboBox(); self.layout_variant_combo.addItems(["自动变化", "小-大-小", "大-小-混排", "混排-大-小"]); self.layout_variant_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.layout_variant_combo.currentTextChanged.connect(self._on_style_change); typo_layout.addWidget(self.layout_variant_combo)
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         self.box_layout_combo = QComboBox(); self.box_layout_combo.addItems(["自适应文字宽度", "固定窗口自动换行"]); self.box_layout_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.box_layout_combo.currentTextChanged.connect(self._on_style_change); typo_layout.addWidget(self.box_layout_combo)
         self.max_lines_slider, self.max_lines_spin = create_slider_spinbox(typo_layout, "标准排版最大行数:", 1, 4, 2, self._on_style_change)
         self.size_slider, self.size_spin = create_slider_spinbox(typo_layout, "字体大小:", 10, 300, 100, self._on_style_change)
         self.spacing_slider, self.spacing_spin = create_slider_spinbox(typo_layout, "字距缩放:", -20, 100, 0, self._on_style_change)
         self.word_spacing_slider, self.word_spacing_spin = create_slider_spinbox(typo_layout, "词距:", 0, 80, 0, self._on_style_change)
         self.emphasis_slider, self.emphasis_spin = create_slider_spinbox(typo_layout, "大小对比 %:", 100, 220, 145, self._on_style_change)
-<<<<<<< HEAD
         self.align_combo = QComboBox(); self.align_combo.addItems(["居中对齐 (Center)", "左对齐 (Left)", "自由混合对齐 (Free Mix)", "左对齐为主混合 (Left Mix)", "右对齐 (Right)", "两端对齐 (Justify)"]); self.align_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.align_combo.currentTextChanged.connect(self._on_style_change); typo_layout.addWidget(self.align_combo)
-=======
-        self.align_combo = QComboBox(); self.align_combo.addItems(["居中对齐 (Center)", "左对齐 (Left)", "右对齐 (Right)", "两端对齐 (Justify)"]); self.align_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.align_combo.currentTextChanged.connect(self._on_style_change); typo_layout.addWidget(self.align_combo)
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         self.lineh_slider, self.lineh_spin = create_slider_spinbox(typo_layout, "行距缩放:", 10, 300, 110, self._on_style_change)
         self.transform_combo = QComboBox(); self.transform_combo.addItems(["首字母大写 (Capitalize)", "全部大写 (UPPERCASE)", "全部小写 (lowercase)", "正常 (Normal)"]); self.transform_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.transform_combo.currentTextChanged.connect(self._on_style_change); typo_layout.addWidget(self.transform_combo)
         self.btn_reflow_standard = QPushButton("✨ 按显示区域重排全部字幕")
@@ -657,13 +608,8 @@ class EditView(QWidget):
 
         page_anim = QWidget(); page_anim_layout = QVBoxLayout(page_anim); page_anim_layout.setSpacing(10)
         sec_anim, anim_layout = create_section_frame("🎬 动态特效 (Animation)", "#f9e2af")
-<<<<<<< HEAD
         self.anim_combo = QComboBox(); self.anim_combo.addItems(["🎉 逐字弹跳 (Pop-in)", "☁️ 柔和淡入 (Fade)", "🌫️ 单词模糊渐入 (Blur Fade)", "▌单词遮罩右移键入", "➡️ 平滑遮罩右移", "⬆️ 电影级向上滚动 (Roll Up)", "💥 远处砸入 (Slam In)", "🔎 慢慢放大出字 (Grow In)", "🧲 词语散开入场 (Scatter In)", "🔤 字字分散入场 (Letter Scatter)", "🎥 朝镜头推进 (Camera Push)", "🧊 3D远近推进 (Depth Push)", "🚫 无动画 (None)"]); self.anim_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.anim_combo.currentTextChanged.connect(self._on_style_change); anim_layout.addWidget(self.anim_combo)
         self.font_motion_combo = QComboBox(); self.font_motion_combo.addItems(["字体动画: 无效果", "字体动画: 波浪感", "字体动画: 水波立体流动", "字体动画: 慢呼吸放大", "字体动画: 词语慢慢分散", "字体动画: 忽大忽小跳动"]); self.font_motion_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.font_motion_combo.currentTextChanged.connect(self._on_style_change); anim_layout.addWidget(self.font_motion_combo)
-=======
-        self.anim_combo = QComboBox(); self.anim_combo.addItems(["🎉 逐字弹跳 (Pop-in)", "☁️ 柔和淡入 (Fade)", "🌫️ 单词模糊渐入 (Blur Fade)", "▌单词遮罩右移键入", "➡️ 平滑遮罩右移", "⬆️ 电影级向上滚动 (Roll Up)", "🚫 无动画 (None)"]); self.anim_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.anim_combo.currentTextChanged.connect(self._on_style_change); anim_layout.addWidget(self.anim_combo)
-        self.font_motion_combo = QComboBox(); self.font_motion_combo.addItems(["字体动画: 无效果", "字体动画: 波浪感"]); self.font_motion_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.font_motion_combo.currentTextChanged.connect(self._on_style_change); anim_layout.addWidget(self.font_motion_combo)
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         self.hl_motion_combo = QComboBox(); self.hl_motion_combo.addItems(["当前词动画: 稳定贴合", "当前词动画: 放大贴合", "当前词动画: 放大并挤开两边"]); self.hl_motion_combo.setStyleSheet("background-color: #313244; padding: 5px; color: #a6e3a1;"); self.hl_motion_combo.currentTextChanged.connect(self._on_style_change); anim_layout.addWidget(self.hl_motion_combo)
         self.pop_speed_slider, self.pop_speed_spin = create_slider_spinbox(anim_layout, "动画速度(秒):", 0.05, 2.0, 0.18, self._on_style_change, is_float=True)
         self.pop_bounce_slider, self.pop_bounce_spin = create_slider_spinbox(anim_layout, "弹跳弹性 %:", 100, 220, 128, self._on_style_change)
@@ -676,10 +622,7 @@ class EditView(QWidget):
         self.chk_use_hl = QCheckBox("🌟 启用高亮"); self.chk_use_hl.setChecked(True); self.chk_use_hl.stateChanged.connect(self._on_style_change); hl_row.addWidget(self.chk_use_hl)
         self.chk_hl_glow = QCheckBox("✨ 加光特效"); self.chk_hl_glow.setChecked(False); self.chk_hl_glow.stateChanged.connect(self._on_style_change); hl_row.addWidget(self.chk_hl_glow); fx_layout.addLayout(hl_row)
         self.glow_size_slider, self.glow_size_spin = create_slider_spinbox(fx_layout, "发光强度:", 0, 100, 20, self._on_style_change)
-<<<<<<< HEAD
         self.text_texture_combo = QComboBox(); self.text_texture_combo.addItems(["字体质感: 无", "字体质感: Grain 轻微颗粒", "字体质感: Noise 噪点", "字体质感: Roughen 粗糙边", "字体质感: Distress texture 破碎磨损", "字体质感: 叠加 Grain+Noise+Roughen+Distress"]); self.text_texture_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.text_texture_combo.currentTextChanged.connect(self._on_style_change); fx_layout.addWidget(self.text_texture_combo)
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         color_row = QHBoxLayout(); self.btn_color_txt = QPushButton("🤍 正文色"); self.btn_color_txt.setStyleSheet("background-color: #313244; padding: 5px;"); self.btn_color_txt.clicked.connect(lambda: self._pick_color("txt")); self.btn_color_hl = QPushButton("💛 高亮文字色"); self.btn_color_hl.setStyleSheet("background-color: #313244; padding: 5px;"); self.btn_color_hl.clicked.connect(lambda: self._pick_color("hl")); color_row.addWidget(self.btn_color_txt); color_row.addWidget(self.btn_color_hl); fx_layout.addLayout(color_row)
         page_fx_layout.addWidget(sec_fx)
         sec_stroke, stroke_layout = create_section_frame("🖍️ 描边 (Stroke)", "#a6e3a1")
@@ -687,10 +630,7 @@ class EditView(QWidget):
         stroke_row = QHBoxLayout(); stroke_row.addWidget(self.btn_color_stroke); stroke_row.addWidget(self.btn_color_stroke_o); stroke_layout.addLayout(stroke_row)
         self.stroke_slider, self.stroke_spin = create_slider_spinbox(stroke_layout, "内描边粗细:", 0, 50, 4, self._on_style_change)
         self.stroke_o_slider, self.stroke_o_spin = create_slider_spinbox(stroke_layout, "外描边粗细:", 0, 50, 0, self._on_style_change)
-<<<<<<< HEAD
         self.stroke_soft_slider, self.stroke_soft_spin = create_slider_spinbox(stroke_layout, "描边柔边 %:", 0, 100, 0, self._on_style_change)
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         page_fx_layout.addWidget(sec_stroke); page_fx_layout.addStretch(); self.sub_pages.addWidget(page_fx)
 
         page_bg = QWidget(); page_bg_layout = QVBoxLayout(page_bg); page_bg_layout.setSpacing(10)
@@ -761,16 +701,11 @@ class EditView(QWidget):
         
         main_layout.addWidget(main_v_splitter)
 
-<<<<<<< HEAD
         self.load_project_on_boot(); self.init_web_engine_once(); self._switch_sub_page(1); self._apply_font_license_filter(); self._update_font_preview(); self._update_preset_preview(); self.switch_inspector("empty")
-=======
-        self.load_project_on_boot(); self.init_web_engine_once(); self._switch_sub_page(1); self._update_font_preview(); self._update_preset_preview(); self.switch_inspector("empty")
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         self.refresh_preset_combo()
 
         QTimer.singleShot(1000, self.check_and_download_ffmpeg)
 
-<<<<<<< HEAD
     def apply_theme(self, colors, theme_key=None):
         self._theme_colors = colors
         self._theme_key = theme_key or ""
@@ -782,8 +717,6 @@ class EditView(QWidget):
             self.timeline_widget.scene.update()
             self.timeline_widget.viewport().update()
 
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     # 👑 时光机核心引擎
     def push_history(self):
         if not hasattr(self, "history"):
@@ -983,23 +916,17 @@ class EditView(QWidget):
         self.state["timing_mode"] = text
         self.auto_save_cache()
 
-<<<<<<< HEAD
     def _on_fill_gap_change(self, state):
         self.state["fill_subtitle_gaps"] = state == Qt.CheckState.Checked.value
         self.auto_save_cache()
 
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     def init_web_engine_once(self):
         html_content = r"""
         <!DOCTYPE html>
         <html>
         <head>
             <style>
-<<<<<<< HEAD
                 __FONT_FACE_CSS__
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                 html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
                 #scale-wrapper { width: 100vw; height: 100vh; position: absolute; left: 0; top: 0; transition: transform 0.15s ease-out; }
                 
@@ -1218,10 +1145,7 @@ class EditView(QWidget):
         </body>
         </html>
         """
-<<<<<<< HEAD
         html_content = html_content.replace("__FONT_FACE_CSS__", font_face_css())
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         self.browser.setHtml(html_content)
     # 👑 新增：实时将文案同步到内存，按 Ctrl+S 时就会一起写入工程文件
     def _on_custom_text_changed(self):
@@ -1300,15 +1224,11 @@ class EditView(QWidget):
                 # 限制字号在 12-16 之间，防止撑爆预览框
                 size = max(11, min(15, int(st.get("size", 100) * 0.10)))
                 font = QFont(family, size)
-<<<<<<< HEAD
                 try:
                     font.setWeight(QFont.Weight(int(st.get("font_weight", "700"))))
                 except Exception:
                     font.setWeight(QFont.Weight.Bold)
                 font.setItalic(str(st.get("font_style", "normal")).lower() == "italic")
-=======
-                font.setBold(True)
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                 painter.setFont(font)
 
                 # 3. 提取文字颜色
@@ -1409,17 +1329,11 @@ class EditView(QWidget):
         size = max(18, min(54, int(st.get("size", 100) * 0.35)))
         color = st.get("color_txt", "#FFFFFF")
         bg = st.get("bg_color", "#000000")
-<<<<<<< HEAD
         font_weight = st.get("font_weight", "700")
         font_style = st.get("font_style", "normal")
         
         self.preset_preview_label.setText(preview_text)
         self.preset_preview_label.setStyleSheet(f"background-color:{bg}; border:1px dashed #45475a; border-radius:10px; color:{color}; padding:10px; font-family:'{family}'; font-size:{size}px; font-weight:{font_weight}; font-style:{font_style};")
-=======
-        
-        self.preset_preview_label.setText(preview_text)
-        self.preset_preview_label.setStyleSheet(f"background-color:{bg}; border:1px dashed #45475a; border-radius:10px; color:{color}; padding:10px; font-family:'{family}'; font-size:{size}px; font-weight:bold;")
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
 
     def toggle_safe_area(self):
@@ -1674,7 +1588,6 @@ class EditView(QWidget):
             btn.setChecked(i == idx)
             btn.blockSignals(False)
 
-<<<<<<< HEAD
     def _on_safe_font_filter_changed(self, *args):
         self.safe_font_only = bool(self.chk_safe_fonts.isChecked()) if hasattr(self, "chk_safe_fonts") else False
         self._apply_font_license_filter()
@@ -1790,23 +1703,6 @@ class EditView(QWidget):
             if hasattr(self, "status_lbl"):
                 self.status_lbl.setText(f"字体分类切换失败，已退回全部字体: {e}")
         self._apply_font_license_filter()
-=======
-    def _set_font_filter(self, text):
-        if not hasattr(self, "font_var"):
-            return
-        if "中文" in text:
-            self.font_var.setWritingSystem(QFontComboBox.WritingSystem.SimplifiedChinese)
-            self.font_var.setFontFilters(QFontComboBox.FontFilter.AllFonts)
-        elif "拉丁" in text:
-            self.font_var.setWritingSystem(QFontComboBox.WritingSystem.Latin)
-            self.font_var.setFontFilters(QFontComboBox.FontFilter.AllFonts)
-        elif "等宽" in text:
-            self.font_var.setWritingSystem(QFontComboBox.WritingSystem.Any)
-            self.font_var.setFontFilters(QFontComboBox.FontFilter.MonospacedFonts)
-        else:
-            self.font_var.setWritingSystem(QFontComboBox.WritingSystem.Any)
-            self.font_var.setFontFilters(QFontComboBox.FontFilter.AllFonts)
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
     def _update_font_preview(self, *args):
         if not hasattr(self, "font_preview_label"):
@@ -1819,20 +1715,13 @@ class EditView(QWidget):
         line_height_pct = self.lineh_spin.value() if hasattr(self, "lineh_spin") else 110
         letter_spacing = self.spacing_spin.value() if hasattr(self, "spacing_spin") else 0
         word_spacing = self.word_spacing_spin.value() if hasattr(self, "word_spacing_spin") else 0
-<<<<<<< HEAD
         font_weight = self.font_weight_combo.currentData() if hasattr(self, "font_weight_combo") else "700"
         font_style = "italic" if hasattr(self, "chk_font_italic") and self.chk_font_italic.isChecked() else "normal"
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         self.font_preview_label.setText(preview_text)
         self.font_preview_label.setStyleSheet(
             f"background-color: #11111b; border: 1px dashed #45475a; border-radius: 8px; color: #ffffff;"
             f"padding: 12px; font-family: '{font_family}'; font-size: {max(16, min(font_size, 72))}px;"
-<<<<<<< HEAD
             f"font-weight: {font_weight}; font-style: {font_style}; letter-spacing: {letter_spacing}px; word-spacing: {word_spacing}px; line-height: {max(90, min(line_height_pct, 180))}%;"
-=======
-            f"letter-spacing: {letter_spacing}px; word-spacing: {word_spacing}px; line-height: {max(90, min(line_height_pct, 180))}%;"
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         )
 
     def sync_inspector_to_clip(self):
@@ -1840,11 +1729,7 @@ class EditView(QWidget):
         clip = self.state["subs_data"][self.current_selected_idx]
         st = clip.get("style", clip) 
         
-<<<<<<< HEAD
         controls = [self.sub_start_spin, self.sub_end_spin, self.pos_x_spin, self.pos_x_slider, self.pos_y_spin, self.pos_y_slider, self.size_slider, self.size_spin, self.box_width_slider, self.box_width_spin, self.box_height_slider, self.box_height_spin, self.max_lines_slider, self.max_lines_spin, self.alpha_slider, self.alpha_spin, self.radius_slider, self.radius_spin, self.padding_slider, self.padding_spin, self.bg_pad_left_slider, self.bg_pad_left_spin, self.bg_pad_right_slider, self.bg_pad_right_spin, self.bg_pad_top_slider, self.bg_pad_top_spin, self.bg_pad_bottom_slider, self.bg_pad_bottom_spin, self.hl_alpha_slider, self.hl_alpha_spin, self.hl_radius_slider, self.hl_radius_spin, self.hl_padding_slider, self.hl_padding_spin, self.hl_pad_left_slider, self.hl_pad_left_spin, self.hl_pad_right_slider, self.hl_pad_right_spin, self.hl_pad_top_slider, self.hl_pad_top_spin, self.hl_pad_bottom_slider, self.hl_pad_bottom_spin, self.spacing_slider, self.spacing_spin, self.word_spacing_slider, self.word_spacing_spin, self.lineh_slider, self.lineh_spin, self.stroke_slider, self.stroke_spin, self.stroke_o_slider, self.stroke_o_spin, self.stroke_soft_slider, self.stroke_soft_spin, self.rot_slider, self.rot_spin, self.glow_size_slider, self.glow_size_spin, self.sh_x_slider, self.sh_x_spin, self.sh_y_slider, self.sh_y_spin, self.sh_blur_slider, self.sh_blur_spin, self.sh_a_slider, self.sh_a_spin, self.pop_speed_slider, self.pop_speed_spin, self.pop_bounce_slider, self.pop_bounce_spin, self.inactive_alpha_slider, self.inactive_alpha_spin, self.mask_top_slider, self.mask_top_spin, self.mask_bot_slider, self.mask_bot_spin, self.merge_bridge_width_slider, self.merge_bridge_width_spin, self.merge_bridge_height_slider, self.merge_bridge_height_spin, self.merge_bridge_alpha_slider, self.merge_bridge_alpha_spin, self.transform_combo, self.align_combo, self.anim_combo, self.font_motion_combo, self.hl_motion_combo, self.text_texture_combo, self.bg_mode_combo, self.layout_mode_combo, self.layout_variant_combo, self.box_layout_combo, self.emphasis_slider, self.emphasis_spin]
-=======
-        controls = [self.sub_start_spin, self.sub_end_spin, self.pos_x_spin, self.pos_x_slider, self.pos_y_spin, self.pos_y_slider, self.size_slider, self.size_spin, self.box_width_slider, self.box_width_spin, self.box_height_slider, self.box_height_spin, self.max_lines_slider, self.max_lines_spin, self.alpha_slider, self.alpha_spin, self.radius_slider, self.radius_spin, self.padding_slider, self.padding_spin, self.bg_pad_left_slider, self.bg_pad_left_spin, self.bg_pad_right_slider, self.bg_pad_right_spin, self.bg_pad_top_slider, self.bg_pad_top_spin, self.bg_pad_bottom_slider, self.bg_pad_bottom_spin, self.hl_alpha_slider, self.hl_alpha_spin, self.hl_radius_slider, self.hl_radius_spin, self.hl_padding_slider, self.hl_padding_spin, self.hl_pad_left_slider, self.hl_pad_left_spin, self.hl_pad_right_slider, self.hl_pad_right_spin, self.hl_pad_top_slider, self.hl_pad_top_spin, self.hl_pad_bottom_slider, self.hl_pad_bottom_spin, self.spacing_slider, self.spacing_spin, self.word_spacing_slider, self.word_spacing_spin, self.lineh_slider, self.lineh_spin, self.stroke_slider, self.stroke_spin, self.stroke_o_slider, self.stroke_o_spin, self.rot_slider, self.rot_spin, self.glow_size_slider, self.glow_size_spin, self.sh_x_slider, self.sh_x_spin, self.sh_y_slider, self.sh_y_spin, self.sh_blur_slider, self.sh_blur_spin, self.sh_a_slider, self.sh_a_spin, self.pop_speed_slider, self.pop_speed_spin, self.pop_bounce_slider, self.pop_bounce_spin, self.inactive_alpha_slider, self.inactive_alpha_spin, self.mask_top_slider, self.mask_top_spin, self.mask_bot_slider, self.mask_bot_spin, self.merge_bridge_width_slider, self.merge_bridge_width_spin, self.merge_bridge_height_slider, self.merge_bridge_height_spin, self.merge_bridge_alpha_slider, self.merge_bridge_alpha_spin, self.transform_combo, self.align_combo, self.anim_combo, self.font_motion_combo, self.hl_motion_combo, self.bg_mode_combo, self.layout_mode_combo, self.layout_variant_combo, self.box_layout_combo, self.emphasis_slider, self.emphasis_spin]
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         for c in controls: c.blockSignals(True)
         
         self.sub_start_spin.setValue(float(clip.get("start", 0)))
@@ -1856,7 +1741,6 @@ class EditView(QWidget):
         self.pos_y_spin.setValue(vy); self.pos_y_slider.setValue(int(vy * 100))
         
         self.size_spin.setValue(int(st.get("size", 100))); self.size_slider.setValue(int(st.get("size", 100)))
-<<<<<<< HEAD
         if hasattr(self, "font_weight_combo"):
             weight = str(st.get("font_weight", "700"))
             idx = self.font_weight_combo.findData(weight)
@@ -1867,8 +1751,6 @@ class EditView(QWidget):
             self.chk_font_italic.blockSignals(True)
             self.chk_font_italic.setChecked(str(st.get("font_style", "normal")).lower() == "italic")
             self.chk_font_italic.blockSignals(False)
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         self.box_width_spin.setValue(float(st.get("box_width", 0))); self.box_width_slider.setValue(int(st.get("box_width", 0) * 100))
         self.box_height_spin.setValue(float(st.get("box_height", 0))); self.box_height_slider.setValue(int(st.get("box_height", 0) * 100))
         self.max_lines_spin.setValue(int(st.get("max_lines", 2))); self.max_lines_slider.setValue(int(st.get("max_lines", 2)))
@@ -1878,10 +1760,7 @@ class EditView(QWidget):
         self.emphasis_spin.setValue(int(st.get("emphasis_scale", 145))); self.emphasis_slider.setValue(int(st.get("emphasis_scale", 145)))
         self.stroke_spin.setValue(int(st.get("stroke_width", 4))); self.stroke_slider.setValue(int(st.get("stroke_width", 4)))
         self.stroke_o_spin.setValue(int(st.get("stroke_o_width", 0))); self.stroke_o_slider.setValue(int(st.get("stroke_o_width", 0)))
-<<<<<<< HEAD
         self.stroke_soft_spin.setValue(int(st.get("stroke_softness", 0))); self.stroke_soft_slider.setValue(int(st.get("stroke_softness", 0)))
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         self.rot_spin.setValue(int(st.get("rotation", 0))); self.rot_slider.setValue(int(st.get("rotation", 0)))
         self.glow_size_spin.setValue(int(st.get("glow_size", 20))); self.glow_size_slider.setValue(int(st.get("glow_size", 20)))
         
@@ -1922,7 +1801,6 @@ class EditView(QWidget):
         
         t_map = {"uppercase": "全部大写 (UPPERCASE)", "lowercase": "全部小写 (lowercase)", "capitalize": "首字母大写 (Capitalize)", "none": "正常 (Normal)"}
         self.transform_combo.setCurrentText(t_map.get(st.get("text_transform", "capitalize")))
-<<<<<<< HEAD
         a_map = {"center": "居中对齐 (Center)", "left": "左对齐 (Left)", "free_mix": "自由混合对齐 (Free Mix)", "left_mix": "左对齐为主混合 (Left Mix)", "right": "右对齐 (Right)", "justify": "两端对齐 (Justify)"}
         self.align_combo.setCurrentText(a_map.get(st.get("text_align", "center")))
         lm_map = {"standard": "标准排版", "smart_caption": "智能图文排版", "mixed_reel": "混合自然排版", "contrast": "大小对比排版", "triple": "三层模板排版", "reel_stack": "前后大小叙事排版", "random_focus": "随机重点排版", "side_steps": "左右排开排版", "axis_stack": "中轴排比排版"}
@@ -1940,22 +1818,6 @@ class EditView(QWidget):
         
         try:
             self.font_var.setCurrentFont(QFont(st.get("font", self.default_style.get("font", "Segoe UI"))))
-=======
-        a_map = {"center": "居中对齐 (Center)", "left": "左对齐 (Left)", "right": "右对齐 (Right)", "justify": "两端对齐 (Justify)"}
-        self.align_combo.setCurrentText(a_map.get(st.get("text_align", "center")))
-        lm_map = {"standard": "标准排版", "contrast": "大小对比排版", "triple": "三层模板排版"}
-        self.layout_mode_combo.setCurrentText(lm_map.get(st.get("layout_mode", "standard"), "标准排版"))
-        lv_map = {"auto": "自动变化", "small-big-small": "小-大-小", "big-small-mix": "大-小-混排", "mix-big-small": "混排-大-小"}
-        self.layout_variant_combo.setCurrentText(lv_map.get(st.get("layout_variant", "auto"), "自动变化"))
-        self.box_layout_combo.setCurrentText("固定窗口自动换行" if st.get("box_layout", "auto") == "fixed" else "自适应文字宽度")
-        anim_map = {"pop": "🎉 逐字弹跳 (Pop-in)", "fade": "☁️ 柔和淡入 (Fade)", "blur_fade": "🌫️ 单词模糊渐入 (Blur Fade)", "word_wipe": "▌单词遮罩右移键入", "wipe_right": "➡️ 平滑遮罩右移", "roll_up": "⬆️ 电影级向上滚动 (Roll Up)", "none": "🚫 无动画 (None)"}
-        self.anim_combo.setCurrentText(anim_map.get(st.get("anim_type", "pop")))
-        self.font_motion_combo.setCurrentText("字体动画: 波浪感" if st.get("font_motion", "none") == "wave" else "字体动画: 无效果")
-        self.hl_motion_combo.setCurrentIndex({"stable": 0, "pop": 1, "push": 2}.get(st.get("hl_motion", "stable"), 0))
-        
-        try:
-            self.font_var.setCurrentFont(st.get("font", self.default_style.get("font", "Segoe UI")))
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         except Exception:
             pass
 
@@ -2005,21 +1867,14 @@ class EditView(QWidget):
             elif target_type == "params":
                 c["pos_x"] = float(self.pos_x_spin.value()); c["pos_y"] = float(self.pos_y_spin.value())
                 c["style"]["rotation"] = self.rot_slider.value(); c["style"]["font"] = self.font_var.currentFont().family()
-<<<<<<< HEAD
                 c["style"]["font_weight"] = self.font_weight_combo.currentData() if hasattr(self, "font_weight_combo") else "700"
                 c["style"]["font_style"] = "italic" if hasattr(self, "chk_font_italic") and self.chk_font_italic.isChecked() else "normal"
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                 c["style"]["size"] = self.size_slider.value(); c["style"]["letter_spacing"] = self.spacing_slider.value(); c["style"]["word_spacing"] = self.word_spacing_slider.value()
                 c["style"]["box_width"] = self.box_width_spin.value()
                 c["style"]["box_height"] = self.box_height_spin.value()
                 c["style"]["max_lines"] = self.max_lines_slider.value()
                 c["style"]["line_height"] = self.lineh_slider.value() / 100.0
-<<<<<<< HEAD
                 c["style"]["stroke_width"] = self.stroke_slider.value(); c["style"]["stroke_o_width"] = self.stroke_o_slider.value(); c["style"]["stroke_softness"] = self.stroke_soft_slider.value()
-=======
-                c["style"]["stroke_width"] = self.stroke_slider.value(); c["style"]["stroke_o_width"] = self.stroke_o_slider.value()
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                 c["style"]["use_hl"] = self.chk_use_hl.isChecked(); c["style"]["hl_glow"] = self.chk_hl_glow.isChecked(); c["style"]["glow_size"] = self.glow_size_slider.value()
                 
                 c["style"]["shadow_x"] = self.sh_x_slider.value(); c["style"]["shadow_y"] = self.sh_y_slider.value()
@@ -2052,7 +1907,6 @@ class EditView(QWidget):
                 c["style"]["merge_bridge_height"] = self.merge_bridge_height_slider.value()
                 c["style"]["merge_bridge_alpha"] = self.merge_bridge_alpha_slider.value()
                 mode_txt = self.layout_mode_combo.currentText()
-<<<<<<< HEAD
                 if "智能图文" in mode_txt:
                     c["style"]["layout_mode"] = "smart_caption"
                 elif "混合自然" in mode_txt:
@@ -2073,18 +1927,12 @@ class EditView(QWidget):
                     c["style"]["layout_mode"] = "standard"
                 variant_txt = self.layout_variant_combo.currentText()
                 c["style"]["layout_variant"] = "small-big-small" if "小-大-小" in variant_txt else "big-small-mix" if "大-小-混排" in variant_txt else "mix-big-small" if "混排-大-小" in variant_txt else "axis-split-tail" if "结尾分" in variant_txt else "axis-123" if "1-2-3" in variant_txt else "auto"
-=======
-                c["style"]["layout_mode"] = "contrast" if "大小对比" in mode_txt else "triple" if "三层模板" in mode_txt else "standard"
-                variant_txt = self.layout_variant_combo.currentText()
-                c["style"]["layout_variant"] = "small-big-small" if "小-大-小" in variant_txt else "big-small-mix" if "大-小-混排" in variant_txt else "mix-big-small" if "混排-大-小" in variant_txt else "auto"
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                 c["style"]["box_layout"] = "fixed" if "固定窗口" in self.box_layout_combo.currentText() else "auto"
                 c["style"]["emphasis_scale"] = self.emphasis_slider.value()
                 
                 tc = self.transform_combo.currentText()
                 c["style"]["text_transform"] = "uppercase" if "UPPERCASE" in tc else "lowercase" if "lowercase" in tc else "capitalize" if "Capitalize" in tc else "none"
                 ac = self.align_combo.currentText()
-<<<<<<< HEAD
                 if "左对齐为主" in ac or "Left Mix" in ac:
                     c["style"]["text_align"] = "left_mix"
                 elif "自由混合" in ac or "Free Mix" in ac:
@@ -2111,11 +1959,6 @@ class EditView(QWidget):
                 elif "Scatter" in anc or "散开入场" in anc:
                     c["style"]["anim_type"] = "scatter_in"
                 elif "Blur" in anc or "模糊" in anc:
-=======
-                c["style"]["text_align"] = "left" if "Left" in ac else "right" if "Right" in ac else "justify" if "Justify" in ac else "center"
-                anc = self.anim_combo.currentText()
-                if "Blur" in anc or "模糊" in anc:
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                     c["style"]["anim_type"] = "blur_fade"
                 elif "单词遮罩" in anc:
                     c["style"]["anim_type"] = "word_wipe"
@@ -2129,7 +1972,6 @@ class EditView(QWidget):
                     c["style"]["anim_type"] = "roll_up"
                 else:
                     c["style"]["anim_type"] = "none"
-<<<<<<< HEAD
                 font_motion_txt = self.font_motion_combo.currentText()
                 if "波浪" in font_motion_txt:
                     c["style"]["font_motion"] = "wave"
@@ -2156,9 +1998,6 @@ class EditView(QWidget):
                     c["style"]["text_texture"] = "grain"
                 else:
                     c["style"]["text_texture"] = "none"
-=======
-                c["style"]["font_motion"] = "wave" if "波浪" in self.font_motion_combo.currentText() else "none"
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                 hl_motion_idx = self.hl_motion_combo.currentIndex()
                 c["style"]["hl_motion"] = "push" if hl_motion_idx == 2 else "pop" if hl_motion_idx == 1 else "stable"
                 
@@ -2566,7 +2405,6 @@ class EditView(QWidget):
             
             is_break = False
             
-<<<<<<< HEAD
             smart_short = "智能重点" in mode or "3-4词为主" in mode
             natural_short = "自然短句" in mode or "1-4" in mode
             fixed_count = 0
@@ -2622,10 +2460,6 @@ class EditView(QWidget):
                     is_break = True
                 elif w_len >= 3 and curr_dur > 1.35:
                     is_break = True
-=======
-            if "单字" in mode:
-                is_break = True
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
             elif sound_aligned:
                 soft_gap = silence_gap > 0.34
                 hard_gap = silence_gap > 0.55
@@ -2683,7 +2517,6 @@ class EditView(QWidget):
             curr["text"] = raw_text.replace(" \n", "\n").replace("\n ", "\n")
             subs.append(curr)
             
-<<<<<<< HEAD
         subs = self._apply_timing_mode(subs, timing_mode)
         if self.state.get("fill_subtitle_gaps", True):
             subs = self._fill_subtitle_gaps(subs)
@@ -2707,9 +2540,6 @@ class EditView(QWidget):
                 continue
             sub["end"] = min(next_start - 0.01, end + max_fill)
         return subs
-=======
-        return self._apply_timing_mode(subs, timing_mode)
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
     def _apply_timing_mode(self, subs, timing_mode):
         if not subs:
@@ -2799,11 +2629,8 @@ class EditView(QWidget):
             
             self.scroll_layout.addWidget(card)
             self.ui_entries.append({"ui": entry, "start_spin": start_spin, "end_spin": end_spin, "btn": btn})
-<<<<<<< HEAD
         if hasattr(self, "_theme_colors"):
             apply_tinted_styles(self.scroll_content, self._theme_colors)
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
             
     def auto_save_cache(self):
         try: 
@@ -2879,12 +2706,9 @@ class EditView(QWidget):
                 self.timing_mode.blockSignals(True)
                 self.timing_mode.setCurrentText(timing_value)
                 self.timing_mode.blockSignals(False)
-<<<<<<< HEAD
                 self.chk_fill_gaps.blockSignals(True)
                 self.chk_fill_gaps.setChecked(bool(self.state.get("fill_subtitle_gaps", True)))
                 self.chk_fill_gaps.blockSignals(False)
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                 self.text_editor.blockSignals(True)
                 self.text_editor.setPlainText(self.state.get("custom_text", ""))
                 self.text_editor.blockSignals(False)
@@ -2929,12 +2753,9 @@ class EditView(QWidget):
             self.timing_mode.blockSignals(True)
             self.timing_mode.setCurrentText(timing_value)
             self.timing_mode.blockSignals(False)
-<<<<<<< HEAD
             self.chk_fill_gaps.blockSignals(True)
             self.chk_fill_gaps.setChecked(bool(self.state.get("fill_subtitle_gaps", True)))
             self.chk_fill_gaps.blockSignals(False)
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
             self.text_editor.blockSignals(True)
             self.text_editor.setPlainText(self.state.get("custom_text", ""))
             self.text_editor.blockSignals(False)

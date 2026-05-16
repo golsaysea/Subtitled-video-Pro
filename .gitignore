@@ -16,10 +16,7 @@ venv/
 /build/
 /dist/
 /*.spec
-<<<<<<< HEAD
 !/main.spec
-=======
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 /release/
 
 # Keep checked-in web runtime builds, but ignore transient Node modules.

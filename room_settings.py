@@ -6,7 +6,6 @@ import json
 import threading
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLabel, 
                              QTextEdit, QPushButton, QMessageBox, QFrame,
-<<<<<<< HEAD
                              QHBoxLayout, QLineEdit, QScrollArea)
 from PyQt6.QtCore import Qt, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices
@@ -15,20 +14,12 @@ import requests
 from core import DEFAULT_SYNC_URL, CLOUD_SECRET
 from app_theme import apply_tinted_styles
 from font_assets import ensure_fonts_dir, font_asset_summary, register_bundled_fonts
-=======
-                             QHBoxLayout, QLineEdit)
-from PyQt6.QtCore import pyqtSignal
-import requests
-
-from core import DEFAULT_SYNC_URL, CLOUD_SECRET
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 from render_config import (
     cpu_safe_profile,
     describe_render_profile,
     detect_hardware_profile,
     peek_render_profile,
 )
-<<<<<<< HEAD
 from font_registry import FONT_REGISTRY_FILE, STATUS_NONCOMMERCIAL, load_font_registry, reset_to_open_font_policy, upsert_approved_fonts
 
 CONFIG_FILE = os.path.join(os.getcwd(), "settings.json")
@@ -96,11 +87,6 @@ class SettingsSection(QWidget):
         """)
 
 
-=======
-
-CONFIG_FILE = os.path.join(os.getcwd(), "settings.json")
-
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 class SettingsView(QWidget):
     sig_sync_finished = pyqtSignal(bool, str, object)
     sig_hardware_finished = pyqtSignal(bool, str, object)
@@ -113,7 +99,6 @@ class SettingsView(QWidget):
         self.load_config()
 
     def init_ui(self):
-<<<<<<< HEAD
         root_layout = QVBoxLayout(self)
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.setSpacing(0)
@@ -131,11 +116,6 @@ class SettingsView(QWidget):
         layout.setContentsMargins(30, 30, 30, 30)
         layout.setSpacing(20)
         self.setting_sections = []
-=======
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(30, 30, 30, 30)
-        layout.setSpacing(20)
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
         # 👑 顶部标题
         title = QLabel("⚙️ 全局设置与引擎管控 (Global Settings)")
@@ -191,11 +171,7 @@ class SettingsView(QWidget):
         self.lbl_sync_status.setStyleSheet("color: #f9e2af; font-size: 12px; border: none;")
         cloud_layout.addWidget(self.lbl_sync_status)
 
-<<<<<<< HEAD
         self.cloud_section = self._add_section(layout, "云端同步链接", cloud_frame, "#89b4fa", expanded=True)
-=======
-        layout.addWidget(cloud_frame)
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
         hardware_frame = QFrame()
         hardware_frame.setStyleSheet("background-color: #181825; border-radius: 10px; border: 1px solid #a6e3a1;")
@@ -264,7 +240,6 @@ class SettingsView(QWidget):
         hardware_btn_row.addWidget(self.btn_cpu_safe)
         hardware_layout.addLayout(hardware_btn_row)
 
-<<<<<<< HEAD
         self.hardware_section = self._add_section(layout, "硬件扫描与渲染优化", hardware_frame, "#a6e3a1", expanded=True)
 
         font_frame = QFrame()
@@ -322,9 +297,6 @@ class SettingsView(QWidget):
         font_layout.addLayout(font_btn_row)
 
         self.font_section = self._add_section(layout, "字体版权登记", font_frame, "#f9e2af", expanded=False)
-=======
-        layout.addWidget(hardware_frame)
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
         # 👑 账号池大框架
         pool_frame = QFrame()
@@ -379,7 +351,6 @@ class SettingsView(QWidget):
         btn_save.clicked.connect(self.save_config)
         pool_layout.addWidget(btn_save)
 
-<<<<<<< HEAD
         self.pool_section = self._add_section(layout, "Cloudflare Whisper AI 账号池", pool_frame, "#89b4fa", expanded=False)
         layout.addStretch(1)
 
@@ -418,9 +389,6 @@ class SettingsView(QWidget):
         """)
         for section in getattr(self, "setting_sections", []):
             section.apply_section_theme(colors)
-=======
-        layout.addWidget(pool_frame, stretch=1)
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
     def load_config(self):
         if os.path.exists(CONFIG_FILE):
@@ -436,7 +404,6 @@ class SettingsView(QWidget):
             except: pass
         else:
             self.txt_sync_url.setText(DEFAULT_SYNC_URL)
-<<<<<<< HEAD
         self.load_font_registry_ui()
         self.refresh_font_asset_label()
         self.refresh_hardware_profile_label()
@@ -520,10 +487,6 @@ class SettingsView(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "整理失败", str(e))
 
-=======
-        self.refresh_hardware_profile_label()
-
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     def refresh_hardware_profile_label(self, profile=None):
         profile = profile if profile is not None else peek_render_profile()
         if not profile or not profile.get("encoder"):
@@ -639,22 +602,9 @@ class SettingsView(QWidget):
 
     def _sync_worker_thread(self, url):
         try:
-<<<<<<< HEAD
             cloud_secret = load_cloud_secret()
             if not cloud_secret:
                 raise Exception("Cloud sync secret is not configured. Set SUBTITLE_COMPOSER_CLOUD_SECRET or add cloud_secret in local settings.json.")
-=======
-            cloud_secret = CLOUD_SECRET
-            if os.path.exists(CONFIG_FILE):
-                try:
-                    with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                        config = json.load(f)
-                    cloud_secret = (config.get("cloud_secret") or cloud_secret).strip()
-                except Exception:
-                    pass
-            if not cloud_secret:
-                raise Exception("未配置云端同步密钥。请设置环境变量 SUBTITLE_COMPOSER_CLOUD_SECRET，或在本地 settings.json 中添加 cloud_secret。")
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
             headers = {"X-App-Auth": cloud_secret}
             res = requests.get(url, headers=headers, timeout=12, verify=False)
             if res.status_code == 401:

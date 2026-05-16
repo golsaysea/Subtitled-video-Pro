@@ -3,7 +3,6 @@
 ## Pre-Release Checklist
 
 1. Confirm the project license baseline is acceptable: `GPL-3.0-only`.
-<<<<<<< HEAD
 2. Confirm no `settings.json`, API keys, Cloudflare tokens, ElevenLabs tokens,
    or personal local workspace paths are staged.
 3. Rotate any credentials that previously existed in the directory, repository,
@@ -16,14 +15,13 @@
 
 ## Recommended First Public Push
 
-The prepared `0516` package is not currently a git repository. It is intended as
-a sanitized public-release workspace.
+The prepared package is intended as a sanitized public-release workspace.
 
 For the first public GitHub repository, use one of these paths:
 
 | Path | When To Use |
 | --- | --- |
-| Fresh public repo from sanitized `0516` files | Recommended first release path |
+| Fresh public repo from sanitized files | Recommended first release path |
 | Copy sanitized files into an existing private repo | Use only after reviewing old history and rotating credentials |
 | History rewrite before public push | Use only if you must preserve existing commit history |
 
@@ -33,30 +31,11 @@ Example first push:
 git init
 git add .
 git status --short
-git commit -m "Prepare 0516 public release"
+git commit -m "Prepare public release"
 git branch -M main
 git remote add origin https://github.com/<owner>/<repo>.git
 git push -u origin main
 ```
-=======
-2. Confirm no `settings.json`, API keys, Cloudflare tokens, ElevenLabs tokens, or local workspace paths are staged.
-3. Rotate any credentials that previously existed in the repository or local git history.
-4. Run the dependency license audit after dependency changes.
-5. Build `web_tools/dist` from current TypeScript sources.
-6. Push a clean tag such as `v0.1.0`.
-
-## Recommended First Public Push
-
-This working tree previously contained local credentials in `settings.json` and a hardcoded cloud sync secret in `core.py`. The current files remove those from the working tree, but existing git history can still retain old values.
-
-For a public GitHub repository, use one of these safe paths:
-
-| Path | When To Use |
-| --- | --- |
-| Fresh public repo from sanitized files | Recommended first release path |
-| History rewrite before push | Use only if you must preserve commit history |
-| Private repo only | Acceptable if credentials are already rotated and access is controlled |
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
 ## Tag Release
 
@@ -68,25 +47,22 @@ git push origin v0.1.0
 
 The `Release` workflow will:
 
-<<<<<<< HEAD
 1. install locked Node dependencies with `npm ci` and Python dependencies;
 2. build Vite web panels;
 3. validate that required release notices and font manifest files exist;
 4. reject a checkout that contains local-only `settings.json`;
-5. build the Windows app with PyInstaller;
-6. bundle `fonts/open`, `font_registry.json`, `nlp_dictionary.txt`, and notices;
-7. create `checksums.sha256`;
-8. create GitHub artifact attestations;
-9. publish or update the GitHub release.
-=======
-1. install Node and Python dependencies;
-2. build Vite web panels;
-3. build the Windows app with PyInstaller;
-4. package notices and license audit files into the zip;
-5. create `checksums.sha256`;
-6. create GitHub artifact attestations;
-7. publish or update the GitHub release.
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
+5. build Windows x64 with PyInstaller on `windows-latest`;
+6. build macOS x64 on `macos-15-intel`;
+7. build macOS arm64 on `macos-15`;
+8. bundle `fonts/open`, `font_registry.json`, `nlp_dictionary.txt`, and notices;
+9. apply ad-hoc signing to the macOS `.app` bundles;
+10. create per-platform checksum files and a combined `checksums.sha256`;
+11. create GitHub artifact attestations;
+12. publish or update the GitHub release.
+
+The macOS packages are ad-hoc signed, not Apple Developer ID notarized. If you
+want a Gatekeeper-friendly public macOS release, add Apple signing certificate
+and notarization secrets to the workflow before publishing broadly.
 
 ## Manual Workflow Release
 
@@ -95,25 +71,23 @@ In GitHub Actions, run `Release` manually and enter a version like `v0.1.0`.
 ## Verify After Release
 
 ```powershell
-<<<<<<< HEAD
 gh release download v0.1.0 -R <owner>/<repo>
 Get-FileHash .\SubtitleComposer-v0.1.0-windows-x64.zip -Algorithm SHA256
 Get-Content .\checksums.sha256
 gh attestation verify .\SubtitleComposer-v0.1.0-windows-x64.zip -R <owner>/<repo>
-=======
-gh release download v0.1.0 -R secure-artifacts/Subtitled-video-Pro
-Get-FileHash .\SubtitleComposer-v0.1.0-windows-x64.zip -Algorithm SHA256
-Get-Content .\checksums.sha256
-gh attestation verify .\SubtitleComposer-v0.1.0-windows-x64.zip -R secure-artifacts/Subtitled-video-Pro
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
+```
+
+For macOS:
+
+```bash
+gh release download v0.1.0 -R <owner>/<repo>
+shasum -a 256 SubtitleComposer-v0.1.0-macos-arm64.zip
+cat checksums.sha256
+gh attestation verify SubtitleComposer-v0.1.0-macos-arm64.zip -R <owner>/<repo>
 ```
 
 ## Rollback
 
-<<<<<<< HEAD
 If a bad release is published, mark the GitHub release as pre-release or delete
 the release artifact, then cut a new tag after fixing the issue. Avoid reusing
 the same tag for public releases unless the release never left private testing.
-=======
-If a bad release is published, mark the GitHub release as pre-release or delete the release artifact, then cut a new tag after fixing the issue. Avoid reusing the same tag for public releases unless the release never left private testing.
->>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
