@@ -440,6 +440,7 @@ jobs:
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           files=()
           while IFS= read -r -d '' file; do
@@ -448,9 +449,9 @@ jobs:
             fi
           done < <(find release -maxdepth 1 -type f -print0)
 
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "${files[@]}" --clobber
-            gh release edit "$RELEASE_TAG" --notes-file "release/RELEASE_NOTES.md"
+          if gh release view "$RELEASE_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${files[@]}" --clobber --repo "$GH_REPO"
+            gh release edit "$RELEASE_TAG" --notes-file "release/RELEASE_NOTES.md" --repo "$GH_REPO"
           else
-            gh release create "$RELEASE_TAG" "${files[@]}" --target "$GITHUB_SHA" --title "Subtitle Composer $RELEASE_TAG" --notes-file "release/RELEASE_NOTES.md"
+            gh release create "$RELEASE_TAG" "${files[@]}" --target "$GITHUB_SHA" --title "Subtitle Composer $RELEASE_TAG" --notes-file "release/RELEASE_NOTES.md" --repo "$GH_REPO"
           fi
