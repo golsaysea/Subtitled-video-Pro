@@ -20,21 +20,32 @@ from PyQt6.QtGui import QPixmap
 from playwright.sync_api import sync_playwright
 
 from core import get_ffmpeg_cmd
+<<<<<<< HEAD
 from app_theme import apply_tinted_styles
+=======
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 from render_config import build_video_encoder_args, get_render_profile
 # 确保导入了 get_exact_duration
 from ui_components import (
     get_exact_duration, get_video_dimensions, render_subtitle_html,
+<<<<<<< HEAD
     get_video_stream_duration,
     rebalance_subtitle_layout, tokenize_display_text,
     normalize_word_timestamps, align_reference_text_to_timestamps,
     FAITH_WORDS
+=======
+    rebalance_subtitle_layout, tokenize_display_text,
+    normalize_word_timestamps, align_reference_text_to_timestamps
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 )
 from project_io import create_reel, sync_project_assets_to_project_dir, update_room_state, save_project
 from workspace_config import WORKSPACE_MODE_CLOUD, get_active_workspace, get_workspace_config
 
 PRESETS_FILE = os.path.join(os.getcwd(), "style_presets.json") 
+<<<<<<< HEAD
 SUBTITLE_SUPERSAMPLE = 2
+=======
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
 def natural_sort_key(path_or_name):
     name = os.path.basename(path_or_name or "")
@@ -125,6 +136,7 @@ class BatchTaskRow(QFrame):
 
     def init_ui(self):
         self.setStyleSheet("QFrame { background-color: #1e1e2e; border: 1px solid #313244; border-radius: 6px; }")
+<<<<<<< HEAD
         self.setFixedHeight(112)
         row_layout = QHBoxLayout(self)
         row_layout.setContentsMargins(10, 8, 10, 8)
@@ -170,6 +182,34 @@ class BatchTaskRow(QFrame):
         self.spin_y.setValue(25.0) # 默认在靠下的位置
         self.spin_y.setStyleSheet("background-color: #313244; color: #cdd6f4; border: 1px solid #45475a;")
         self.spin_y.setFixedWidth(76)
+=======
+        self.setFixedHeight(80)
+        row_layout = QHBoxLayout(self)
+        row_layout.setContentsMargins(10, 10, 10, 10)
+        row_layout.setSpacing(10)
+
+        self.btn_vid = QPushButton("➕ 选画面")
+        self.btn_vid.setFixedSize(90, 40)
+        self.btn_vid.setStyleSheet("background-color: #89b4fa; color: #11111b; font-weight: bold; border-radius: 4px; border: none;")
+        self.btn_vid.clicked.connect(self.select_video)
+        row_layout.addWidget(self.btn_vid)
+
+        self.btn_aud = QPushButton("🎵 选配音")
+        self.btn_aud.setFixedSize(90, 40)
+        self.btn_aud.setStyleSheet("background-color: #cba6f7; color: #11111b; font-weight: bold; border-radius: 4px; border: none;")
+        self.btn_aud.clicked.connect(self.select_audio)
+        row_layout.addWidget(self.btn_aud)
+
+        # 👑 新增：独立的高度调节器
+        y_layout = QVBoxLayout()
+        y_label = QLabel("字幕高度(Y)", styleSheet="color: #a6adc8; font-size: 10px; border: none;")
+        self.spin_y = QDoubleSpinBox()
+        self.spin_y.setRange(-50.0, 50.0)
+        self.spin_y.setValue(25.0) # 默认在靠下的位置
+        self.spin_y.setSuffix("%")
+        self.spin_y.setStyleSheet("background-color: #313244; color: #cdd6f4; border: 1px solid #45475a;")
+        self.spin_y.setFixedWidth(70)
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         y_layout.addWidget(y_label)
         y_layout.addWidget(self.spin_y)
         row_layout.addLayout(y_layout)
@@ -207,11 +247,18 @@ class BatchTaskRow(QFrame):
     def select_video(self):
         path, _ = QFileDialog.getOpenFileName(self, "选择画面", "", "Video Files (*.mp4 *.mov *.webm *.jpg *.png)")
         if path:
+<<<<<<< HEAD
             self.set_video_path(path)
+=======
+            self.video_path = path
+            self.btn_vid.setText("✅ " + os.path.basename(path)[:4] + "..")
+            self.btn_vid.setStyleSheet("background-color: #a6e3a1; color: #11111b; font-weight: bold; border-radius: 4px;")
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
     def select_audio(self):
         path, _ = QFileDialog.getOpenFileName(self, "选择配音", "", "Audio Files (*.mp3 *.wav)")
         if path:
+<<<<<<< HEAD
             self.set_audio_path(path)
 
     def set_video_path(self, path):
@@ -253,6 +300,14 @@ class BatchTaskRow(QFrame):
     # 👑 核心魔法：单行截取中间帧预览
     def preview_frame(self):
         self.sync_paths_from_fields()
+=======
+            self.audio_path = path
+            self.btn_aud.setText("✅ " + os.path.basename(path)[:4] + "..")
+            self.btn_aud.setStyleSheet("background-color: #a6e3a1; color: #11111b; font-weight: bold; border-radius: 4px;")
+
+    # 👑 核心魔法：单行截取中间帧预览
+    def preview_frame(self):
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         if not self.video_path:
             return QMessageBox.warning(self, "提示", "请先选择画面！")
         
@@ -306,9 +361,13 @@ class BatchTaskRow(QFrame):
             with sync_playwright() as p:
                 b_path = get_browser_path()
                 browser = p.chromium.launch(headless=True, executable_path=b_path) if b_path else p.chromium.launch(headless=True)
+<<<<<<< HEAD
                 render_w = int(proj_w * SUBTITLE_SUPERSAMPLE)
                 render_h = int(proj_h * SUBTITLE_SUPERSAMPLE)
                 page = browser.new_page(viewport={"width": render_w, "height": render_h}, device_scale_factor=1)
+=======
+                page = browser.new_page(viewport={"width": proj_w, "height": proj_h}, device_scale_factor=1)
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                 
                 px = sub_data.get("pos_x", 0.0); py = sub_data.get("pos_y", 25.0)
                 base_css = f"position: absolute; left: calc(50% + {px}%); top: calc(50% + {py}%); transform: translate(-50%, -50%); z-index: 10; width: max-content; max-width: 92%;"
@@ -316,13 +375,21 @@ class BatchTaskRow(QFrame):
                 html_content = f"<!DOCTYPE html><html><head><style>html, body {{ margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; background: transparent; display: flex; justify-content: center; align-items: center; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }} #scale-wrapper {{ width: 100vw; height: 100vh; position: absolute; left: 0; top: 0; filter: drop-shadow(0px 0px 0px transparent); }}</style></head><body><div id='scale-wrapper'><div style='{base_css}'>{sub_html}</div></div></body></html>"
                 
                 page.set_content(html_content)
+<<<<<<< HEAD
                 page.screenshot(path=sub_path, omit_background=True, scale="css")
+=======
+                page.screenshot(path=sub_path, omit_background=True)
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                 browser.close()
                 
             # 5. FFmpeg 合成最终预览图
             out_preview = os.path.join(temp_dir, "final_preview.jpg").replace("\\", "/")
+<<<<<<< HEAD
             preview_filter = f"[1:v]format=rgba,scale={proj_w}:{proj_h}:flags=lanczos[sub];[0:v][sub]overlay=0:0:format=auto"
             subprocess.run([get_ffmpeg_cmd(), "-y", "-i", frame_path, "-i", sub_path, "-filter_complex", preview_filter, "-vframes", "1", out_preview], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+=======
+            subprocess.run([get_ffmpeg_cmd(), "-y", "-i", frame_path, "-i", sub_path, "-filter_complex", "overlay=0:0", "-vframes", "1", out_preview], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
             
             # 6. 通知 UI 线程展示
             QMetaObject.invokeMethod(self, "_show_preview_dialog", Qt.ConnectionType.QueuedConnection, Q_ARG(str, out_preview))
@@ -404,7 +471,11 @@ class BatchView(QWidget):
         
         top_header.addWidget(QLabel("✂️ AI断句:", styleSheet="color: #89b4fa; font-weight: bold; margin-left: 15px;"))
         self.chunk_mode = QComboBox()
+<<<<<<< HEAD
         self.chunk_mode.addItems(["单字轰炸 (1字/句)", "智能重点短句 (3-4词为主)", "自然短句 (1-4词)", "双词节奏 (2词/句)", "三词短句 (3词/句)", "四词短句 (4词/句)", "短句快闪 (3-5字)", "长句大段 (约10字)"])
+=======
+        self.chunk_mode.addItems(["单字轰炸 (1字/句)", "短句快闪 (3-5字)", "长句大段 (约10字)"])
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         self.chunk_mode.setStyleSheet("background-color: #313244; color: #cdd6f4; padding: 5px 10px; font-weight: bold; border-radius: 5px;")
         top_header.addWidget(self.chunk_mode)
 
@@ -468,21 +539,30 @@ class BatchView(QWidget):
 
         self.refresh_presets()
 
+<<<<<<< HEAD
     def apply_theme(self, colors, theme_key=None):
         self._theme_colors = colors
         self._theme_key = theme_key or ""
         apply_tinted_styles(self, colors)
 
+=======
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     def open_paste_dialog(self, auto_add=False):
         dialog = QDialog(self)
         dialog.setWindowTitle("📥 智能表格粘贴器")
         dialog.resize(650, 450)
         dialog.setStyleSheet("background-color: #181825;")
+<<<<<<< HEAD
         if hasattr(self, "_theme_colors"):
             apply_tinted_styles(dialog, self._theme_colors)
         layout = QVBoxLayout(dialog)
         
         lbl = QLabel("去 Excel / 飞书 / 腾讯文档 选中内容按 Ctrl+C，在这里 Ctrl+V：\n👉 单列：只填正文；两列：大标题 + 正文\n👉 也支持：视频路径 / 配音路径 / 字幕Y值 / 大标题 / 正文")
+=======
+        layout = QVBoxLayout(dialog)
+        
+        lbl = QLabel("去 Excel / 飞书 / 腾讯文档 选中内容按 Ctrl+C，在这里 Ctrl+V：\n👉 完美兼容带回车换行的单元格\n👉 单列：只填正文\n👉 两列：左列大标题，右列详细正文")
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         lbl.setStyleSheet("color: #a6e3a1; font-weight: bold; font-size: 14px; line-height: 1.5;")
         layout.addWidget(lbl)
         
@@ -518,6 +598,7 @@ class BatchView(QWidget):
                 if not parts: continue
                 row_obj = row_widgets[i]
                 
+<<<<<<< HEAD
                 def looks_media_path(value):
                     return str(value or "").lower().endswith((".mp4", ".mov", ".webm", ".jpg", ".png"))
 
@@ -538,6 +619,9 @@ class BatchView(QWidget):
                     if len(parts) > 4:
                         row_obj.txt_content.setPlainText(parts[4].strip())
                 elif len(parts) >= 2:
+=======
+                if len(parts) >= 2:
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                     row_obj.txt_title.setText(parts[0].strip())
                     row_obj.txt_content.setPlainText(parts[1].strip())
                 elif len(parts) == 1:
@@ -547,8 +631,11 @@ class BatchView(QWidget):
             
         btn.clicked.connect(apply_paste)
         layout.addWidget(btn)
+<<<<<<< HEAD
         if hasattr(self, "_theme_colors"):
             apply_tinted_styles(dialog, self._theme_colors)
+=======
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         dialog.exec()
 
     def init_table_tab(self):
@@ -595,8 +682,11 @@ class BatchView(QWidget):
     def add_table_row(self):
         row = BatchTaskRow(parent_view=self) # 👑 修复：将父视图传给行，以便获取预设样式
         self.table_layout.addWidget(row)
+<<<<<<< HEAD
         if hasattr(self, "_theme_colors"):
             apply_tinted_styles(row, self._theme_colors)
+=======
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
     def _table_rows(self):
         rows = []
@@ -620,7 +710,13 @@ class BatchView(QWidget):
         paths = sorted(paths, key=natural_sort_key)
         rows = self._ensure_table_rows(len(paths))
         for row, path in zip(rows, paths):
+<<<<<<< HEAD
             row.set_video_path(path)
+=======
+            row.video_path = path
+            row.btn_vid.setText("✅ " + os.path.basename(path)[:4] + "..")
+            row.btn_vid.setStyleSheet("background-color: #a6e3a1; color: #11111b; font-weight: bold; border-radius: 4px;")
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
             if not row.txt_title.text().strip():
                 row.txt_title.setText(os.path.splitext(os.path.basename(path))[0])
 
@@ -631,7 +727,13 @@ class BatchView(QWidget):
         paths = sorted(paths, key=natural_sort_key)
         rows = self._ensure_table_rows(len(paths))
         for row, path in zip(rows, paths):
+<<<<<<< HEAD
             row.set_audio_path(path)
+=======
+            row.audio_path = path
+            row.btn_aud.setText("✅ " + os.path.basename(path)[:4] + "..")
+            row.btn_aud.setStyleSheet("background-color: #a6e3a1; color: #11111b; font-weight: bold; border-radius: 4px;")
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
     def init_folder_tab(self):
         layout = QVBoxLayout(self.tab_folder)
@@ -729,7 +831,10 @@ class BatchView(QWidget):
         for i in range(self.table_layout.count()):
             row_widget = self.table_layout.itemAt(i).widget()
             if isinstance(row_widget, BatchTaskRow):
+<<<<<<< HEAD
                 row_widget.sync_paths_from_fields()
+=======
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                 if row_widget.video_path:
                     self.task_queue.append({
                         "type": "table",
@@ -752,13 +857,19 @@ class BatchView(QWidget):
         for i in range(self.table_layout.count()):
             row_widget = self.table_layout.itemAt(i).widget()
             if isinstance(row_widget, BatchTaskRow):
+<<<<<<< HEAD
                 row_widget.sync_paths_from_fields()
+=======
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                 if row_widget.video_path:
                     tasks.append({
                         "idx": i,
                         "video": row_widget.video_path,
                         "audio": row_widget.audio_path,
+<<<<<<< HEAD
                         "a_mode": self.audio_mode.currentText(),
+=======
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                         "title": row_widget.txt_title.text().strip(),
                         "text": row_widget.txt_content.toPlainText().strip(),
                         "pos_y": row_widget.spin_y.value()
@@ -829,7 +940,10 @@ class BatchView(QWidget):
                 "idx": i,
                 "video": v_path,
                 "audio": a_path,
+<<<<<<< HEAD
                 "a_mode": self.audio_mode.currentText(),
+=======
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                 "title": base_name,
                 "text": custom_text,
                 "pos_y": 25.0
@@ -999,6 +1113,7 @@ class BatchView(QWidget):
         payload = {"built_paths": built_paths, "record_json": batch_record["files"]["json"], "record_csv": batch_record["files"]["csv"]}
         self.sig_projects_done.emit(success, failed, project_dir, payload)
 
+<<<<<<< HEAD
     def _aligned_total_duration(self, video_dur, audio_dur, audio_mode):
         video_dur = max(0.1, float(video_dur or 0.0))
         audio_dur = max(0.0, float(audio_dur or 0.0))
@@ -1016,6 +1131,8 @@ class BatchView(QWidget):
             return (audio_path if has_audio else ""), 100, 100
         return (audio_path if has_audio else ""), 0, 100
 
+=======
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     def _build_single_project(self, task, project_dir, preset_style, c_mode, timing_mode):
         video_path = task.get("video", "")
         audio_path = task.get("audio", "")
@@ -1030,11 +1147,16 @@ class BatchView(QWidget):
             project_data["batch_record"] = task.get("batch_record")
 
         video_dur = get_exact_duration(video_path) or 5.0
+<<<<<<< HEAD
         video_stream_dur = get_video_stream_duration(video_path) or video_dur
         audio_dur = get_exact_duration(audio_path) if audio_path and os.path.exists(audio_path) else 0.0
         audio_mode = task.get("a_mode") or self.audio_mode.currentText()
         total_dur = self._aligned_total_duration(video_dur, audio_dur, audio_mode)
         project_audio_path, v_volume, a_volume = self._audio_project_settings(audio_path, audio_mode)
+=======
+        audio_dur = get_exact_duration(audio_path) if audio_path and os.path.exists(audio_path) else 0.0
+        total_dur = max(video_dur, audio_dur, 1.0)
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         custom_text = task.get("text", "").strip()
         if not custom_text and title:
             custom_text = title
@@ -1056,6 +1178,7 @@ class BatchView(QWidget):
         )
 
         edit_state = {
+<<<<<<< HEAD
             "video_clips": [{"path": video_path, "start": 0.0, "end": total_dur, "dur": video_stream_dur}],
             "audio_path": project_audio_path,
             "subs_data": subs_data,
@@ -1065,6 +1188,17 @@ class BatchView(QWidget):
             "v_scale": 100,
             "v_volume": v_volume,
             "a_volume": a_volume,
+=======
+            "video_clips": [{"path": video_path, "start": 0.0, "end": total_dur, "dur": video_dur}],
+            "audio_path": audio_path if audio_path and os.path.exists(audio_path) else "",
+            "subs_data": subs_data,
+            "a_trim": [0.0, audio_dur if audio_dur > 0 else total_dur],
+            "duration": total_dur,
+            "resolution": "原画检测 (自动跟随)",
+            "v_scale": 100,
+            "v_volume": 100,
+            "a_volume": 100,
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
             "chunk_mode": c_mode,
             "timing_mode": timing_mode,
             "custom_text": custom_text,
@@ -1337,13 +1471,19 @@ class BatchView(QWidget):
             except: proj_w, proj_h = 1080, 1920
             
             v_dur = get_exact_duration(v_path)
+<<<<<<< HEAD
             v_stream_dur = get_video_stream_duration(v_path) or v_dur
             a_dur = get_exact_duration(a_path) if a_path else 0
             total_dur = self._aligned_total_duration(v_dur, a_dur, a_mode)
+=======
+            a_dur = get_exact_duration(a_path) if a_path else 0
+            total_dur = max(max(v_dur, a_dur), 5.0)
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
             with sync_playwright() as p:
                 b_path = get_browser_path()
                 browser = p.chromium.launch(headless=True, executable_path=b_path) if b_path else p.chromium.launch(headless=True)
+<<<<<<< HEAD
                 render_w = int(proj_w * SUBTITLE_SUPERSAMPLE)
                 render_h = int(proj_h * SUBTITLE_SUPERSAMPLE)
                 page = browser.new_page(viewport={"width": render_w, "height": render_h}, device_scale_factor=1)
@@ -1360,6 +1500,14 @@ class BatchView(QWidget):
                         f_concat.write(f"file '{path}'\n")
                         f_concat.write(f"duration {duration:.3f}\n")
                         last_concat_file = path
+=======
+                page = browser.new_page(viewport={"width": proj_w, "height": proj_h}, device_scale_factor=1)
+                page.set_content("<html><body style='background:transparent;'></body></html>")
+                page.screenshot(path=blank_path, omit_background=True)
+
+                with open(concat_path, "w", encoding="utf-8") as f_concat:
+                    current_time = 0.0; frame_idx = 0; frame_step = 1.0 / 30.0
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                     
                     while current_time < total_dur:
                         active_subs = [s for s in subs_data if float(s.get('start', 0)) <= current_time <= float(s.get('end', 1))]
@@ -1367,11 +1515,19 @@ class BatchView(QWidget):
                             future_starts = [float(s.get('start', 0)) for s in subs_data if float(s.get('start', 0)) > current_time]
                             if future_starts:
                                 next_start = min(future_starts)
+<<<<<<< HEAD
                                 write_subtitle_frame(blank_path, next_start - current_time)
                                 current_time = next_start
                             else:
                                 gap = total_dur - current_time
                                 if gap > 0: write_subtitle_frame(blank_path, gap)
+=======
+                                f_concat.write(f"file '{blank_path}'\nduration {(next_start - current_time):.3f}\n")
+                                current_time = next_start
+                            else:
+                                gap = total_dur - current_time
+                                if gap > 0: f_concat.write(f"file '{blank_path}'\nduration {gap:.3f}\n")
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                                 current_time = total_dur
                             continue
                         
@@ -1386,11 +1542,17 @@ class BatchView(QWidget):
                         html_content = f"<!DOCTYPE html><html><head><style>html, body {{ margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; background: transparent; display: flex; justify-content: center; align-items: center; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }} #scale-wrapper {{ width: 100vw; height: 100vh; position: absolute; left: 0; top: 0; filter: drop-shadow(0px 0px 0px transparent); }}</style></head><body><div id='scale-wrapper'>{html_subs}</div></body></html>"
                         page.set_content(html_content)
                         frame_path = os.path.join(temp_dir, f"f_{frame_idx}.png").replace("\\", "/")
+<<<<<<< HEAD
                         page.screenshot(path=frame_path, omit_background=True, scale="css")
                         write_subtitle_frame(frame_path, frame_step)
                         current_time += frame_step; frame_idx += 1
 
                     f_concat.write(f"file '{last_concat_file}'\n")
+=======
+                        page.screenshot(path=frame_path, omit_background=True)
+                        f_concat.write(f"file '{frame_path}'\nduration {frame_step:.3f}\n")
+                        current_time += frame_step; frame_idx += 1
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                         
             self.sig_progress.emit(70)
 
@@ -1398,6 +1560,7 @@ class BatchView(QWidget):
             
             v_loop_path = os.path.join(temp_dir, "v_loop.txt").replace("\\", "/")
             with open(v_loop_path, 'w', encoding='utf-8') as f:
+<<<<<<< HEAD
                 media_loop_dur = max(0.0, float(v_stream_dur or 0.0))
                 safe_v_path = v_path.replace("\\", "/")
                 if media_loop_dur > 0.1:
@@ -1410,6 +1573,10 @@ class BatchView(QWidget):
                         remaining -= part_dur
                 else:
                     f.write(f"file '{safe_v_path}'\n")
+=======
+                loop_count = int(total_dur / max(0.1, v_dur)) + 1
+                for _ in range(loop_count): f.write(f"file '{v_path.replace('\\', '/')}'\n")
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
             has_audio_file = bool(a_path and os.path.exists(a_path))
             render_profile = get_render_profile()
@@ -1420,9 +1587,13 @@ class BatchView(QWidget):
             args = ["-y", "-f", "concat", "-safe", "0", "-i", v_loop_path, "-f", "concat", "-safe", "0", "-i", concat_path]
             if has_audio_file: args.extend(["-i", a_path])
             
+<<<<<<< HEAD
             video_guard = f"tpad=stop_mode=clone:stop_duration={total_dur:.3f},trim=duration={total_dur:.3f},setpts=PTS-STARTPTS"
             sub_guard = f"tpad=stop_mode=clone:stop_duration={total_dur:.3f},trim=duration={total_dur:.3f},setpts=PTS-STARTPTS"
             vf = f"[0:v]scale={proj_w}:{proj_h}:force_original_aspect_ratio=increase,crop={proj_w}:{proj_h},format=rgba,{video_guard}[bg];[1:v]format=rgba,scale={proj_w}:{proj_h}:flags=lanczos,{sub_guard}[sub];[bg][sub]overlay=0:0:eof_action=pass:format=auto,format=yuv420p[outv]"
+=======
+            vf = f"[0:v]scale={proj_w}:{proj_h}:force_original_aspect_ratio=increase,crop={proj_w}:{proj_h},format=yuv420p[bg];[bg][1:v]overlay=0:0:shortest=1,format=yuv420p[outv]"
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
             
             if "混合" in a_mode and has_audio_file:
                 af = "[0:a][2:a]amix=inputs=2:duration=longest[outa]"
@@ -1503,6 +1674,7 @@ class BatchView(QWidget):
             silence_gap = next_start - curr["end"]
             curr_dur = curr["end"] - curr["start"]
             
+<<<<<<< HEAD
             smart_short = "智能重点" in mode or "3-4词为主" in mode
             natural_short = "自然短句" in mode or "1-4" in mode
             fixed_count = 0
@@ -1546,6 +1718,9 @@ class BatchView(QWidget):
                     len(curr["words"]) >= 4 or
                     (len(curr["words"]) >= 3 and curr_dur > 1.35)
                 )
+=======
+            if "单字" in mode: is_break = True
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
             elif sound_aligned:
                 is_break = (
                     (silence_gap > 0.55 and curr_dur >= 0.25) or

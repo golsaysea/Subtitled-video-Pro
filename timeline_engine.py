@@ -9,6 +9,7 @@ import os
 TRACK_H = 35
 HEADER_H = 30
 
+<<<<<<< HEAD
 def _timeline_colors(controller=None):
     c = getattr(controller, "_theme_colors", None) or {}
     return {
@@ -28,25 +29,41 @@ def _timeline_colors(controller=None):
     }
 
 
+=======
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 class TimelineHeader(QWidget):
     def __init__(self, parent=None, controller=None):
         super().__init__(parent); self.controller = controller; self.setFixedWidth(80); self.TRACK_H = TRACK_H 
         
     def paintEvent(self, event):
+<<<<<<< HEAD
         c = _timeline_colors(self.controller)
         painter = QPainter(self); painter.setRenderHint(QPainter.RenderHint.Antialiasing); painter.fillRect(self.rect(), QColor(c["bg"]))
         painter.setPen(QColor(c["border"])); painter.drawLine(79, 0, 79, self.height()); painter.drawLine(0, HEADER_H, 80, HEADER_H)
         painter.setFont(QFont("Arial", 9, QFont.Weight.Bold)); painter.setPen(QColor(c["warn"]))
+=======
+        painter = QPainter(self); painter.setRenderHint(QPainter.RenderHint.Antialiasing); painter.fillRect(self.rect(), QColor("#11111b")) 
+        painter.setPen(QColor("#313244")); painter.drawLine(79, 0, 79, self.height()); painter.drawLine(0, HEADER_H, 80, HEADER_H)
+        painter.setFont(QFont("Arial", 9, QFont.Weight.Bold)); painter.setPen(QColor("#f9e2af"))
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         
         # 👑 完美的 6 轨道层级命名
         painter.drawText(10, HEADER_H + self.TRACK_H*0 + 22, "T3 标题")
         painter.drawText(10, HEADER_H + self.TRACK_H*1 + 22, "T2 正文")
         painter.drawText(10, HEADER_H + self.TRACK_H*2 + 22, "T1 蒙版")
+<<<<<<< HEAD
         painter.setPen(QColor(c["accent"]))
         painter.drawText(10, HEADER_H + self.TRACK_H*3 + 22, "V1 画面")
         painter.setPen(QColor(c["border"]))
         painter.drawLine(0, HEADER_H + self.TRACK_H*4 + 2, 80, HEADER_H + self.TRACK_H*4 + 2)
         painter.setPen(QColor(c["accent_2"]))
+=======
+        painter.setPen(QColor("#89b4fa"))
+        painter.drawText(10, HEADER_H + self.TRACK_H*3 + 22, "V1 画面")
+        painter.setPen(QColor("#313244"))
+        painter.drawLine(0, HEADER_H + self.TRACK_H*4 + 2, 80, HEADER_H + self.TRACK_H*4 + 2)
+        painter.setPen(QColor("#a6e3a1"))
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         painter.drawText(10, HEADER_H + self.TRACK_H*4 + 28, "A1 原声")
         painter.drawText(10, HEADER_H + self.TRACK_H*5 + 28, "A2 配音")
 
@@ -135,6 +152,7 @@ class ClipItem(QGraphicsRectItem):
 
     def paint(self, painter, option, widget=None):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+<<<<<<< HEAD
         controller = self.scene().views()[0].controller if self.scene() and self.scene().views() else None
         c = _timeline_colors(controller)
         clip_color = c["accent"] if self.clip_type == "video" else c["accent_2"] if self.clip_type == "audio" else c["warn"]
@@ -144,6 +162,15 @@ class ClipItem(QGraphicsRectItem):
         if self.clip_type == "video" and self.media_dur > 0:
             loop_w = self.media_dur * self.pps; curr_x = loop_w; painter.setPen(QPen(QColor(c["selected_text"]), 2, Qt.PenStyle.DashLine))
             while curr_x < self.rect().width(): painter.drawLine(QPointF(curr_x, 0), QPointF(curr_x, self.rect().height())); curr_x += loop_w
+=======
+        if self.isSelected(): painter.setBrush(QBrush(QColor("#f38ba8"))); painter.setPen(QPen(QColor("white"), 2))
+        else: painter.setBrush(QBrush(self.base_color)); painter.setPen(QPen(QColor("#313244"), 1))
+        painter.drawRoundedRect(self.rect(), 4, 4)
+        if self.clip_type == "video" and self.media_dur > 0:
+            loop_w = self.media_dur * self.pps; curr_x = loop_w; painter.setPen(QPen(QColor(255, 255, 255, 180), 2, Qt.PenStyle.DashLine))
+            while curr_x < self.rect().width(): painter.drawLine(QPointF(curr_x, 0), QPointF(curr_x, self.rect().height())); curr_x += loop_w
+        controller = self.scene().views()[0].controller
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         if self.clip_type == "audio" and hasattr(controller, 'a_wave_pixmap'):
             wave = controller.a_wave_pixmap
             if wave and not wave.isNull(): painter.setClipRect(self.rect()); painter.drawPixmap(self.rect(), wave, QRectF(wave.rect())); painter.setClipping(False)
@@ -156,6 +183,7 @@ class ClipItem(QGraphicsRectItem):
                     if thumbs[idx] and not thumbs[idx].isNull(): painter.drawPixmap(QRectF(curr_x, 0, thumb_w, TRACK_H - 4), thumbs[idx], QRectF(thumbs[idx].rect()))
                     curr_x += thumb_w; idx += 1
                 painter.setClipping(False)
+<<<<<<< HEAD
         painter.setPen(QPen(QColor(c["selected_text"]))); painter.setFont(QFont("Arial", 9, QFont.Weight.Bold)); painter.drawText(self.rect().adjusted(5, 5, -5, -5), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, self.text.replace("\n", " "))
 
 class PlayheadItem(QGraphicsItem):
@@ -174,11 +202,30 @@ class AdvancedTimeline(QGraphicsView):
         super().drawBackground(painter, rect); pps = self.controller.zoom_factor; dur = max(10.0, self.controller.state.get("duration", 10.0)); w = max(rect.width(), dur * pps + 200); self.scene.setSceneRect(0, 0, w, 300)
         c = _timeline_colors(self.controller)
         painter.fillRect(QRectF(0, 0, w, HEADER_H), QColor(c["panel"])); painter.setPen(QColor(c["muted"])); painter.setFont(QFont("Arial", 8))
+=======
+        painter.setPen(QPen(QColor("#11111b"))); painter.setFont(QFont("Arial", 9, QFont.Weight.Bold)); painter.drawText(self.rect().adjusted(5, 5, -5, -5), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, self.text.replace("\n", " "))
+
+class PlayheadItem(QGraphicsItem):
+    def __init__(self, height):
+        super().__init__(); self.line_height = height; self.setZValue(1000) 
+    def boundingRect(self): return QRectF(-10, 0, 20, self.line_height)
+    def paint(self, painter, option, widget=None):
+        painter.setPen(QPen(QColor("#f38ba8"), 2)); painter.drawLine(0, 0, 0, int(self.line_height)); painter.setBrush(QBrush(QColor("#f38ba8"))); painter.drawPolygon([QPointF(-6, 0), QPointF(6, 0), QPointF(0, 10)])
+
+class AdvancedTimeline(QGraphicsView):
+    def __init__(self, controller):
+        super().__init__(); self.controller = controller; self.scene = QGraphicsScene(self); self.setScene(self.scene); self.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop); self.setRenderHint(QPainter.RenderHint.Antialiasing); self.setStyleSheet("background-color: #11111b; border: none;"); self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff); self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff); self.playhead = PlayheadItem(800); self.scene.addItem(self.playhead); self.is_scrubbing = False
+
+    def drawBackground(self, painter, rect):
+        super().drawBackground(painter, rect); pps = self.controller.zoom_factor; dur = max(10.0, self.controller.state.get("duration", 10.0)); w = max(rect.width(), dur * pps + 200); self.scene.setSceneRect(0, 0, w, 300)
+        painter.fillRect(QRectF(0, 0, w, HEADER_H), QColor("#181825")); painter.setPen(QColor("gray")); painter.setFont(QFont("Arial", 8))
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         for i in range(0, int(w / pps) + 1, max(1, int(100 / pps))):
             x = i * pps; painter.drawText(QPointF(x + 5, 15), f"{i}s"); painter.drawLine(QPointF(x, 20), QPointF(x, 30))
             
         # 👑 画出 6 条斑马线背景
         y_offsets = [HEADER_H, HEADER_H+TRACK_H, HEADER_H+TRACK_H*2, HEADER_H+TRACK_H*3, HEADER_H+TRACK_H*4, HEADER_H+TRACK_H*5]
+<<<<<<< HEAD
         colors = [c["panel"], c["panel_2"], c["panel"], c["panel_2"], c["panel"], c["panel_2"]]
         for y, color in zip(y_offsets, colors): painter.fillRect(QRectF(0, y, w, TRACK_H), QColor(color))
         
@@ -187,6 +234,16 @@ class AdvancedTimeline(QGraphicsView):
         v_wave = getattr(self.controller, 'v_wave_pixmap', None); clips = self.controller.state.get("video_clips", [])
         if v_wave and not v_wave.isNull() and clips:
             min_x = min([clip["start"] for clip in clips]) * pps; max_x = max([clip["end"] for clip in clips]) * pps; t_rect = QRectF(min_x, HEADER_H + TRACK_H*4 + 5, max_x - min_x, TRACK_H - 4); painter.fillRect(t_rect, QColor(c["hint"])); painter.setClipRect(t_rect); painter.drawPixmap(t_rect, v_wave, QRectF(v_wave.rect())); painter.setClipping(False)
+=======
+        colors = ["#181825", "#1e1e2e", "#181825", "#1e1e2e", "#181825", "#1e1e2e"]
+        for y, color in zip(y_offsets, colors): painter.fillRect(QRectF(0, y, w, TRACK_H), QColor(color))
+        
+        painter.setPen(QColor("#313244")); painter.drawLine(QPointF(0, HEADER_H+TRACK_H*4), QPointF(w, HEADER_H+TRACK_H*4))
+        
+        v_wave = getattr(self.controller, 'v_wave_pixmap', None); clips = self.controller.state.get("video_clips", [])
+        if v_wave and not v_wave.isNull() and clips:
+            min_x = min([c["start"] for c in clips]) * pps; max_x = max([c["end"] for c in clips]) * pps; t_rect = QRectF(min_x, HEADER_H + TRACK_H*4 + 5, max_x - min_x, TRACK_H - 4); painter.fillRect(t_rect, QColor("#1e2e24")); painter.setClipRect(t_rect); painter.drawPixmap(t_rect, v_wave, QRectF(v_wave.rect())); painter.setClipping(False)
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
     def sync_from_controller(self):
         for item in self.scene.items():
@@ -274,4 +331,8 @@ class AdvancedTimeline(QGraphicsView):
     def wheelEvent(self, event):
         if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
             delta = event.angleDelta().y(); self.controller.zoom_factor = min(300.0, self.controller.zoom_factor * 1.2) if delta > 0 else max(10.0, self.controller.zoom_factor * 0.8); self.sync_from_controller(); self.viewport().update()
+<<<<<<< HEAD
         else: super().wheelEvent(event)
+=======
+        else: super().wheelEvent(event)
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c

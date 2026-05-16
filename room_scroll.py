@@ -15,7 +15,10 @@ from PyQt6.QtWidgets import (
 
 from elevenlabs_web_tool import create_elevenlabs_tool
 from elevenlabs_assist_tool import create_elevenlabs_assist_tool
+<<<<<<< HEAD
 from app_theme import apply_tinted_styles
+=======
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 from project_io import update_room_state
 
 
@@ -823,6 +826,7 @@ class ScrollView(QWidget):
         layout.addLayout(body, stretch=1)
         self.switch_tool(0)
 
+<<<<<<< HEAD
     def apply_theme(self, colors, theme_key=None):
         self._theme_colors = colors
         self._theme_key = theme_key or ""
@@ -831,6 +835,8 @@ class ScrollView(QWidget):
             if hasattr(page, "apply_theme"):
                 page.apply_theme(colors, self._theme_key)
 
+=======
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     def _add_tool_button(self, layout, badge, name, index, icon_path=None):
         btn = QPushButton(f"{badge}\n{name}")
         btn.setCheckable(True)

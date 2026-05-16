@@ -10,7 +10,10 @@ from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import QFileDialog, QVBoxLayout, QWidget
 
 from web_asset_loader import load_web_tool_page
+<<<<<<< HEAD
 from app_theme import web_theme_script
+=======
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
 try:
     from PyQt6.QtWebChannel import QWebChannel
@@ -1097,12 +1100,18 @@ ELEVENLABS_HTML = r"""
 class ElevenLabsWebTool(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+<<<<<<< HEAD
         self._theme_colors = None
         self._theme_key = ""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self.view = QWebEngineView(self)
         self.view.loadFinished.connect(self._on_load_finished)
+=======
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.view = QWebEngineView(self)
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         self.bridge = ElevenLabsBridge(self)
         self.channel = QWebChannel(self.view.page())
         self.channel.registerObject("elevenlabsBridge", self.bridge)
@@ -1110,6 +1119,7 @@ class ElevenLabsWebTool(QWidget):
         load_web_tool_page(self.view, "elevenlabs", ELEVENLABS_HTML, os.getcwd())
         layout.addWidget(self.view)
 
+<<<<<<< HEAD
     def _on_load_finished(self, ok):
         if ok and self._theme_colors:
             self.view.page().runJavaScript(web_theme_script(self._theme_colors, self._theme_key))
@@ -1119,6 +1129,8 @@ class ElevenLabsWebTool(QWidget):
         self._theme_key = theme_key or ""
         self.view.page().runJavaScript(web_theme_script(colors, self._theme_key))
 
+=======
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
 def create_elevenlabs_tool(parent=None, fallback_cls=None):
     if WEBENGINE_AVAILABLE:

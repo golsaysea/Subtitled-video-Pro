@@ -9,7 +9,10 @@ import shutil
 
 PROJECT_VERSION = 4
 ASSETS_DIR = "assets"
+<<<<<<< HEAD
 PROJECT_DIR_EXCLUDES = {ASSETS_DIR, "fonts", "__pycache__"}
+=======
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
 
 def _safe_media_filename(source_path, fallback="media"):
@@ -91,7 +94,11 @@ def _backfill_edit_room_from_legacy_fields(merged, source):
     if not edit_state.get("audio_asset_rel_path") and media_files.get("audio_asset_rel_path"):
         edit_state["audio_asset_rel_path"] = media_files.get("audio_asset_rel_path", "")
 
+<<<<<<< HEAD
     for key in ("duration", "resolution", "v_scale", "v_volume", "a_volume", "chunk_mode", "timing_mode", "fill_subtitle_gaps"):
+=======
+    for key in ("duration", "resolution", "v_scale", "v_volume", "a_volume", "chunk_mode", "timing_mode"):
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         if key in source and source.get(key) not in (None, ""):
             try:
                 current_duration = float(str(edit_state.get("duration", 0) or 0).replace(",", "."))
@@ -216,7 +223,10 @@ def _base_project_data(path, project_type, project_name):
                 "v_scale": 100, "v_volume": 100, "a_volume": 100,
                 "chunk_mode": "双行大段 (约10字，智能折行)",
                 "timing_mode": "J Cut (字幕稍后收尾)",
+<<<<<<< HEAD
                 "fill_subtitle_gaps": True,
+=======
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                 "default_pos_x": 0.0, "default_pos_y": 25.0, "default_style": {}
             }
         },
@@ -255,6 +265,7 @@ def ensure_project_schema(data, path=None):
     return merged
 
 # 👑 获取所有项目文件夹 (一级目录)
+<<<<<<< HEAD
 def get_project_folder_paths(workspace, recursive=False, max_depth=None):
     folders = []
     if not os.path.exists(workspace):
@@ -318,6 +329,27 @@ def get_reels_in_folder(folder_path, recursive=False):
                 if item.lower().endswith(".scomp"):
                     p = os.path.join(folder_path, item)
                     reels.append({"path": p, "mtime": os.path.getmtime(p)})
+=======
+def get_project_folders(workspace):
+    folders = []
+    if os.path.exists(workspace):
+        for item in os.listdir(workspace):
+            if item.startswith("."):
+                continue
+            p = os.path.join(workspace, item)
+            if os.path.isdir(p):
+                folders.append(item)
+    return sorted(folders)
+
+# 👑 获取某个文件夹下的所有 Reels (二级目录)
+def get_reels_in_folder(folder_path):
+    reels = []
+    if os.path.exists(folder_path):
+        for item in os.listdir(folder_path):
+            if item.lower().endswith(".scomp"):
+                p = os.path.join(folder_path, item)
+                reels.append({"path": p, "mtime": os.path.getmtime(p)})
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     reels.sort(key=lambda x: x["mtime"], reverse=True)
     return [r["path"] for r in reels]
 
@@ -383,6 +415,10 @@ def load_or_create_default_project(workspace=None):
         return create_reel(default_folder, "第一条Reel", "edit_room")
     
     first_folder = os.path.join(workspace, folders[0])
+<<<<<<< HEAD
     reels = get_reels_in_folder(first_folder, recursive=True)
+=======
+    reels = get_reels_in_folder(first_folder)
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     if reels: return load_project(reels[0])
     return create_reel(first_folder, "第一条Reel", "edit_room")

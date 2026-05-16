@@ -1,6 +1,10 @@
 # Project License Compliance Report
 
+<<<<<<< HEAD
 > Generated: 2026-05-16
+=======
+> Generated: 2026-05-15
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 > Audit guide: https://tpscsm-docs.pages.dev/license-audit/
 > This report is for compliance reference only and is not legal advice.
 
@@ -22,7 +26,11 @@ the repository should include the full GPL-3.0 license text.
 
 Final assessment: compliant for open-source distribution if the repository and
 release artifacts are distributed under `GPL-3.0-only` and include source,
+<<<<<<< HEAD
 license, third-party notices, and bundled font license files.
+=======
+license, and third-party notices.
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
 Important boundary: the same dependency set is not compatible with an MIT,
 Apache-2.0, or proprietary-only project license unless the project owner has and
@@ -34,8 +42,12 @@ documents a valid Riverbank commercial license for PyQt/PyQt-WebEngine.
 - Keep `GPL-3.0-only` project license notice visible in the repository and
   release package.
 - Preserve third-party license notices for PyQt6, PyQt6-WebEngine, requests,
+<<<<<<< HEAD
   playwright, bundled fonts, and any packaged browser/runtime data.
 - Keep OFL license files alongside redistributed font files under `fonts/open`.
+=======
+  playwright, and any packaged browser/runtime data.
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 - If FFmpeg GPL binaries are bundled, include FFmpeg notices and source-offer
   information; if the app only downloads FFmpeg on demand, document that the
   user obtains FFmpeg from the upstream provider.
@@ -47,10 +59,15 @@ documents a valid Riverbank commercial license for PyQt/PyQt-WebEngine.
 | --- | ---: | --- |
 | Strong copyleft (`GPL-3.0-only`) | 2 | Compatible with GPL-3.0-only project baseline |
 | Permissive (`Apache-2.0`) | 2 | Compatible with GPL-3.0-only project baseline; preserve notices |
+<<<<<<< HEAD
 | Unknown | 0 | None found in direct runtime dependencies |
 | Non-open-source | 0 | None found in direct runtime dependencies |
 
 Bundled asset note: `fonts/open/open_fonts_manifest.json` records 21 bundled font files under `OFL-1.1` or compatible open font licenses. These are release assets, not package-manager direct runtime dependencies.
+=======
+| Unknown | 0 | None found |
+| Non-open-source | 0 | None found |
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
 ## Compatibility Details
 
@@ -60,7 +77,10 @@ Bundled asset note: `fonts/open/open_fonts_manifest.json` records 21 bundled fon
 | PyQt6-WebEngine | GPL-3.0-only or commercial | Compatible under GPL-3.0-only | Same PyQt commercial/GPL boundary; Riverbank states PyQt-WebEngine is not LGPL |
 | requests | Apache-2.0 | Compatible | Preserve Apache-2.0 license and notices |
 | playwright | Apache-2.0 | Compatible | Preserve Apache-2.0 license and notices; track bundled browser assets separately |
+<<<<<<< HEAD
 | Open font pack | OFL-1.1 or compatible open font license | Compatible as bundled font assets | Preserve license files; respect reserved font name rules if modified |
+=======
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
 ## Third-Party License Notices
 
@@ -74,12 +94,15 @@ Bundled asset note: `fonts/open/open_fonts_manifest.json` records 21 bundled fon
 - `requests==2.34.2` — Python Software Foundation / Requests maintainers.
 - `playwright==1.59.0` — Microsoft Corporation.
 
+<<<<<<< HEAD
 ### OFL-1.1 / Compatible Open Font Licenses
 
 - Google Fonts package under `fonts/open`.
 - Adobe Source / Source Han open font package under `fonts/open`.
 - Canonical inventory: `fonts/open/open_fonts_manifest.json`.
 
+=======
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 ## Risk Notes
 
 1. PyQt6 and PyQt6-WebEngine are the decisive licensing factors. A permissive
@@ -87,8 +110,13 @@ Bundled asset note: `fonts/open/open_fonts_manifest.json` records 21 bundled fon
    PyQt licensing is documented.
 2. FFmpeg is currently fetched from a GPL build URL in `core.py`; avoid bundling
    that binary without notices and source-offer handling.
+<<<<<<< HEAD
 3. Bundled fonts are open-font assets, but their license files must stay with the
    redistributed package.
 4. Re-run this audit whenever `requirements.txt`, `web_tools/package.json`,
    `fonts/open/open_fonts_manifest.json`, or the FFmpeg distribution strategy
    changes.
+=======
+3. Re-run this audit whenever `requirements.txt`, `web_tools/package.json`, or
+   the FFmpeg distribution strategy changes.
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c

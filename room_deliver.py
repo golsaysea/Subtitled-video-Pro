@@ -11,11 +11,16 @@ import shutil
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QFrame, QProgressBar, QTextEdit, QFileDialog, QMessageBox, QDoubleSpinBox,
+<<<<<<< HEAD
     QDialog, QTreeWidget, QTreeWidgetItem, QScrollArea, QGridLayout, QCheckBox, QSplitter
+=======
+    QDialog, QListWidget, QScrollArea, QGridLayout, QCheckBox, QSplitter
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 )
 from PyQt6.QtCore import QProcess, QTimer, Qt
 from PyQt6.QtGui import QPixmap, QCursor
 from core import get_ffmpeg_cmd
+<<<<<<< HEAD
 from app_theme import apply_tinted_styles
 from render_config import build_video_encoder_args, get_render_profile
 from playwright.sync_api import sync_playwright
@@ -29,6 +34,16 @@ from font_registry import STATUS_NONCOMMERCIAL
 
 CACHE_FILE = os.path.join(tempfile.gettempdir(), "sh_v8_project_cache.json")
 SUBTITLE_SUPERSAMPLE = 2
+=======
+from render_config import build_video_encoder_args, get_render_profile
+from playwright.sync_api import sync_playwright
+
+from ui_components import get_exact_duration, get_video_dimensions, render_subtitle_html
+from project_io import load_project, get_project_folders, get_reels_in_folder
+from workspace_config import WORKSPACE_MODE_CLOUD, get_active_workspace, get_workspace_config
+
+CACHE_FILE = os.path.join(tempfile.gettempdir(), "sh_v8_project_cache.json")
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
 
 def get_browser_path():
@@ -137,6 +152,7 @@ class ProjectPickerDialog(QDialog):
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.setStyleSheet("QSplitter::handle { background-color: #313244; width: 2px; }")
+<<<<<<< HEAD
         self.folder_list = QTreeWidget()
         self.folder_list.setHeaderHidden(True)
         self.folder_list.setStyleSheet("""
@@ -146,6 +162,15 @@ class ProjectPickerDialog(QDialog):
             QTreeWidget::item:selected { background-color: #89b4fa; color: #11111b; }
         """)
         self.folder_list.itemClicked.connect(lambda item, column: self.on_folder_selected(item))
+=======
+        self.folder_list = QListWidget()
+        self.folder_list.setStyleSheet("""
+            QListWidget { background: #181825; border: 1px solid #313244; border-radius: 8px; padding: 6px; }
+            QListWidget::item { padding: 10px; margin: 3px 0; border-radius: 6px; color: #a6adc8; font-weight: bold; }
+            QListWidget::item:selected { background-color: #89b4fa; color: #11111b; }
+        """)
+        self.folder_list.itemClicked.connect(self.on_folder_selected)
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         splitter.addWidget(self.folder_list)
 
         scroll = QScrollArea()
@@ -161,6 +186,7 @@ class ProjectPickerDialog(QDialog):
         main.addWidget(splitter, stretch=1)
 
         actions = QHBoxLayout()
+<<<<<<< HEAD
         btn_select_folder = QPushButton("选择当前层")
         btn_select_tree = QPushButton("含子文件夹全选")
         btn_clear = QPushButton("清空选择")
@@ -171,11 +197,24 @@ class ProjectPickerDialog(QDialog):
         btn_ok.setStyleSheet("background-color: #a6e3a1; color: #11111b; font-weight: bold; padding: 8px 18px; border-radius: 6px;")
         btn_select_folder.clicked.connect(lambda: self.select_current_folder(recursive=False))
         btn_select_tree.clicked.connect(lambda: self.select_current_folder(recursive=True))
+=======
+        btn_select_folder = QPushButton("全选当前文件夹")
+        btn_clear = QPushButton("清空选择")
+        btn_cancel = QPushButton("取消")
+        btn_ok = QPushButton("确认选择")
+        for btn in [btn_select_folder, btn_clear, btn_cancel]:
+            btn.setStyleSheet("background-color: #313244; color: #cdd6f4; font-weight: bold; padding: 8px 14px; border-radius: 6px;")
+        btn_ok.setStyleSheet("background-color: #a6e3a1; color: #11111b; font-weight: bold; padding: 8px 18px; border-radius: 6px;")
+        btn_select_folder.clicked.connect(self.select_current_folder)
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         btn_clear.clicked.connect(self.clear_selection)
         btn_cancel.clicked.connect(self.reject)
         btn_ok.clicked.connect(self.accept)
         actions.addWidget(btn_select_folder)
+<<<<<<< HEAD
         actions.addWidget(btn_select_tree)
+=======
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         actions.addWidget(btn_clear)
         actions.addStretch()
         actions.addWidget(btn_cancel)
@@ -186,6 +225,7 @@ class ProjectPickerDialog(QDialog):
     def _key(self, path):
         return os.path.normcase(os.path.abspath(path))
 
+<<<<<<< HEAD
     def _folder_rel_from_item(self, item):
         if not item:
             return ""
@@ -223,6 +263,20 @@ class ProjectPickerDialog(QDialog):
     def on_folder_selected(self, item):
         if item:
             self.load_folder(self._folder_path_from_item(item))
+=======
+    def refresh_folders(self):
+        self.folder_list.clear()
+        folders = get_project_folders(self.workspace)
+        for folder in folders:
+            self.folder_list.addItem(folder)
+        if folders:
+            self.folder_list.setCurrentRow(0)
+            self.load_folder(os.path.join(self.workspace, folders[0]))
+
+    def on_folder_selected(self, item):
+        if item:
+            self.load_folder(os.path.join(self.workspace, item.text()))
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
     def load_folder(self, folder_path):
         for i in reversed(range(self.grid_layout.count())):
@@ -231,6 +285,7 @@ class ProjectPickerDialog(QDialog):
                 widget.deleteLater()
         self.cards = []
 
+<<<<<<< HEAD
         paths = get_reels_in_folder(folder_path, recursive=False)
         if not paths:
             child_count = len(get_reels_in_folder(folder_path, recursive=True))
@@ -238,6 +293,11 @@ class ProjectPickerDialog(QDialog):
             if child_count:
                 empty_text += f"\n子文件夹里有 {child_count} 个工程，可点左侧子文件夹或用「含子文件夹全选」。"
             empty = QLabel(empty_text)
+=======
+        paths = get_reels_in_folder(folder_path)
+        if not paths:
+            empty = QLabel("这个项目文件夹里还没有 Reel 工程")
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
             empty.setStyleSheet("color: #6c7086; font-size: 15px; padding: 20px;")
             self.grid_layout.addWidget(empty, 0, 0)
             return
@@ -256,6 +316,7 @@ class ProjectPickerDialog(QDialog):
             if col >= col_count:
                 col = 0
                 row += 1
+<<<<<<< HEAD
         if hasattr(self, "_theme_colors"):
             apply_tinted_styles(self.grid_widget, self._theme_colors)
 
@@ -263,6 +324,8 @@ class ProjectPickerDialog(QDialog):
         self._theme_colors = colors
         self._theme_key = theme_key or ""
         apply_tinted_styles(self, colors)
+=======
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
     def set_selected(self, path, checked):
         key = self._key(path)
@@ -272,6 +335,7 @@ class ProjectPickerDialog(QDialog):
             self.selected.pop(key, None)
         self.update_count()
 
+<<<<<<< HEAD
     def select_current_folder(self, recursive=False):
         item = self.folder_list.currentItem()
         folder_path = self._folder_path_from_item(item) if item else ""
@@ -285,6 +349,9 @@ class ProjectPickerDialog(QDialog):
                 card.checkbox.blockSignals(False)
             self.update_count()
             return
+=======
+    def select_current_folder(self):
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         for card in self.cards:
             card.checkbox.setChecked(True)
 
@@ -394,11 +461,14 @@ class DeliverView(QWidget):
         right_layout.addWidget(self.progress_bar)
         main_layout.addWidget(right_panel, stretch=1)
 
+<<<<<<< HEAD
     def apply_theme(self, colors, theme_key=None):
         self._theme_colors = colors
         self._theme_key = theme_key or ""
         apply_tinted_styles(self, colors)
 
+=======
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
     def _summarize_project_state(self):
         clips = self.project_state.get("video_clips", [])
         a_path = self.project_state.get("audio_path", "")
@@ -498,8 +568,11 @@ class DeliverView(QWidget):
         if not workspace or not os.path.isdir(workspace):
             return QMessageBox.warning(self, "提示", "当前工作区不可用，请先在工程大厅选择本地或云端工作区。")
         dialog = ProjectPickerDialog(workspace, self.batch_project_paths, self)
+<<<<<<< HEAD
         if hasattr(self, "_theme_colors"):
             dialog.apply_theme(self._theme_colors, getattr(self, "_theme_key", ""))
+=======
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         cfg = get_workspace_config()
@@ -579,12 +652,15 @@ class DeliverView(QWidget):
                 self.batch_render_index += 1
                 QTimer.singleShot(0, self._start_next_batch_render)
                 return
+<<<<<<< HEAD
             batch_audit = audit_project(project, workspace=self.current_workspace())
             if any(row.get("status") == STATUS_NONCOMMERCIAL for row in batch_audit.get("fonts", {}).get("fonts", [])):
                 self.log_safe(f"跳过工程: {os.path.basename(project_path)} | 含非商用/禁止商用字体", "#f38ba8")
                 self.batch_render_index += 1
                 QTimer.singleShot(0, self._start_next_batch_render)
                 return
+=======
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
             self.current_batch_project_path = project_path
             self._summarize_project_state()
             self.out_file_path = self._unique_batch_output_path(project)
@@ -643,6 +719,7 @@ class DeliverView(QWidget):
         if not a_path:
             self.log_safe("⚠️ 未检测到独立音频，将尝试使用视频原声；若原视频也无音轨，则输出静音视频。", "#f9e2af")
 
+<<<<<<< HEAD
         try:
             audit_source = dict(self.project_data or {})
             audit_source.setdefault("room_state", {})["edit_room"] = self.project_state
@@ -666,6 +743,8 @@ class DeliverView(QWidget):
         except Exception as e:
             self.log_safe(f"⚠️ 导出前体检跳过: {e}", "#f9e2af")
 
+=======
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
         file_path, _ = QFileDialog.getSaveFileName(self, "导出最终视频", "", "MP4 Files (*.mp4)")
         if not file_path:
             return
@@ -697,18 +776,25 @@ class DeliverView(QWidget):
             with sync_playwright() as p:
                 b_path = get_browser_path()
                 browser = p.chromium.launch(headless=True, executable_path=b_path) if b_path else p.chromium.launch(headless=True)
+<<<<<<< HEAD
                 render_w = int(proj_w * SUBTITLE_SUPERSAMPLE)
                 render_h = int(proj_h * SUBTITLE_SUPERSAMPLE)
                 page = browser.new_page(viewport={"width": render_w, "height": render_h}, device_scale_factor=1)
                 page.set_content("<html><body style='background:transparent;'></body></html>")
                 page.screenshot(path=blank_path, omit_background=True, scale="css")
                 bundled_font_css = font_face_css()
+=======
+                page = browser.new_page(viewport={"width": proj_w, "height": proj_h}, device_scale_factor=1)
+                page.set_content("<html><body style='background:transparent;'></body></html>")
+                page.screenshot(path=blank_path, omit_background=True)
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
                 with open(self.concat_path, "w", encoding="utf-8") as f_concat:
                     current_time = 0.0
                     frame_idx = 0
                     fps = 30
                     frame_step = 1.0 / fps
+<<<<<<< HEAD
                     last_concat_file = blank_path
 
                     def write_subtitle_frame(path, duration):
@@ -717,6 +803,8 @@ class DeliverView(QWidget):
                         f_concat.write(f"file '{path}'\n")
                         f_concat.write(f"duration {duration:.3f}\n")
                         last_concat_file = path
+=======
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
                     while current_time < total_dur:
                         active_subs = [s for s in subs_data if float(s.get('start', 0)) <= current_time <= float(s.get('end', 1))]
@@ -725,12 +813,20 @@ class DeliverView(QWidget):
                             if future_starts:
                                 next_start = min(future_starts)
                                 gap = next_start - current_time
+<<<<<<< HEAD
                                 write_subtitle_frame(blank_path, gap)
+=======
+                                f_concat.write(f"file '{blank_path}'\nduration {gap:.3f}\n")
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                                 current_time = next_start
                             else:
                                 gap = total_dur - current_time
                                 if gap > 0:
+<<<<<<< HEAD
                                     write_subtitle_frame(blank_path, gap)
+=======
+                                    f_concat.write(f"file '{blank_path}'\nduration {gap:.3f}\n")
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                                 current_time = total_dur
                             continue
 
@@ -749,7 +845,10 @@ class DeliverView(QWidget):
                         <html>
                         <head>
                             <style>
+<<<<<<< HEAD
                                 {bundled_font_css}
+=======
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                                 html, body {{ 
                                     margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; 
                                     background: transparent; display: flex; justify-content: center; align-items: center; 
@@ -773,14 +872,22 @@ class DeliverView(QWidget):
 
                         page.set_content(html_content)
                         frame_path = os.path.join(self.temp_dir, f"f_{frame_idx}.png").replace("\\", "/")
+<<<<<<< HEAD
                         page.screenshot(path=frame_path, omit_background=True, scale="css")
                         write_subtitle_frame(frame_path, frame_step)
+=======
+                        page.screenshot(path=frame_path, omit_background=True)
+                        f_concat.write(f"file '{frame_path}'\nduration {frame_step:.3f}\n")
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                         current_time += frame_step
                         frame_idx += 1
                         self.update_progress_safe(int((current_time / total_dur) * 50))
 
+<<<<<<< HEAD
                     f_concat.write(f"file '{last_concat_file}'\n")
 
+=======
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                 browser.close()
             self.log_safe("✅ 多轨道推演截图完毕！准备混音与剪辑...", "#a6e3a1")
             QTimer.singleShot(0, self.start_ffmpeg_qprocess)
@@ -826,7 +933,11 @@ class DeliverView(QWidget):
                     clip_path = clip.get("path", "")
                     if not clip_path or duration <= 0:
                         return 0.0
+<<<<<<< HEAD
                     media_dur = get_video_stream_duration(clip_path) or float(clip.get("dur", 0.0) or 0.0) or get_exact_duration(clip_path) or 5.0
+=======
+                    media_dur = get_exact_duration(clip_path) or float(clip.get("dur", 5.0))
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
                     media_dur = max(0.1, media_dur)
                     remaining = duration
                     written = 0.0
@@ -869,9 +980,14 @@ class DeliverView(QWidget):
         if video_concat_path:
             vf_scale = f"scale={proj_w}*{v_scale}:{proj_h}*{v_scale}:force_original_aspect_ratio=increase"
             vf_crop = f"crop={proj_w}:{proj_h}"
+<<<<<<< HEAD
             video_guard = f"tpad=stop_mode=clone:stop_duration={target_dur:.3f},trim=duration={target_dur:.3f},setpts=PTS-STARTPTS"
             sub_guard = f"tpad=stop_mode=clone:stop_duration={target_dur:.3f},trim=duration={target_dur:.3f},setpts=PTS-STARTPTS"
             fc_parts.append(f"[0:v]{vf_scale},{vf_crop},format=rgba,{video_guard}[bg];[{sub_idx}:v]format=rgba,scale={proj_w}:{proj_h}:flags=lanczos,{sub_guard}[sub];[bg][sub]overlay=0:0:eof_action=pass:format=auto,format=yuv420p[outv]")
+=======
+            # 👑 修复：加入 shortest=1，强制跟随最短轨道，防止片尾无限拉长
+            fc_parts.append(f"[0:v]{vf_scale},{vf_crop},format=yuv420p[bg];[bg][{sub_idx}:v]overlay=0:0:shortest=1,format=yuv420p[outv]")
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
             if a_path:
                 if has_audio:
                     fc_parts.append(f"[0:a]volume={v_vol}[va]")
@@ -883,16 +999,30 @@ class DeliverView(QWidget):
             elif has_audio:
                 fc_parts.append(f"[0:a]volume={v_vol}[va]")
                 audio_map = "[va]"
+<<<<<<< HEAD
         else:
             fc_parts.append(f"[{sub_idx}:v]format=rgba,scale={proj_w}:{proj_h}:flags=lanczos,tpad=stop_mode=clone:stop_duration={target_dur:.3f},trim=duration={target_dur:.3f},setpts=PTS-STARTPTS,format=yuv420p[outv]")
             if a_path:
                 fc_parts.append(f"[1:a]volume={a_vol}[aout]")
                 audio_map = "[aout]"
+=======
+        elif a_path:
+            fc_parts.append("[0:v]format=yuv420p[outv]")
+            fc_parts.append(f"[1:a]volume={a_vol}[aout]")
+            audio_map = "[aout]"
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
         if fc_parts:
             args.extend(["-filter_complex", ";".join(fc_parts)])
 
+<<<<<<< HEAD
         args.extend(["-map", "[outv]"])
+=======
+        if video_concat_path:
+            args.extend(["-map", "[outv]"])
+        else:
+            args.extend(["-map", f"{sub_idx}:v"])
+>>>>>>> 5a04da6a531f4371718564480a44293c4ea0381c
 
         if audio_map:
             args.extend(["-map", audio_map, "-c:a", "aac", "-b:a", "192k"])
