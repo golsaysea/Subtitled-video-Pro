@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+      - "V*"
   workflow_dispatch:
     inputs:
       version:
@@ -37,8 +38,9 @@ jobs:
           if ("${{ github.event_name }}" -eq "workflow_dispatch") {
             $tag = "${{ inputs.version }}"
           }
-          if (-not ($tag -match '^v[0-9]+\.[0-9]+\.[0-9]+')) {
-            throw "Release tag must look like v0.1.0. Received: $tag"
+          $tag = $tag.Trim()
+          if (-not ($tag -match '^[vV][0-9]+\.[0-9]+\.[0-9]+$')) {
+            throw "Release tag must look like v0.1.0 or V0.1.0. Received: $tag"
           }
           "RELEASE_TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
@@ -204,8 +206,9 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             tag="${{ inputs.version }}"
           fi
-          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-            echo "Release tag must look like v0.1.0. Received: $tag" >&2
+          tag="$(printf '%s' "$tag" | xargs)"
+          if [[ ! "$tag" =~ ^[vV][0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tag must look like v0.1.0 or V0.1.0. Received: $tag" >&2
             exit 1
           fi
           echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
@@ -380,8 +383,9 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             tag="${{ inputs.version }}"
           fi
-          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-            echo "Release tag must look like v0.1.0. Received: $tag" >&2
+          tag="$(printf '%s' "$tag" | xargs)"
+          if [[ ! "$tag" =~ ^[vV][0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tag must look like v0.1.0 or V0.1.0. Received: $tag" >&2
             exit 1
           fi
           echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
