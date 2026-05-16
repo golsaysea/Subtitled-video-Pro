@@ -1,0 +1,1056 @@
+{
+  "schema": 1,
+  "fonts": [
+    {
+      "family": "Anton",
+      "file": "anton/Anton-Regular.ttf",
+      "source": "Google Fonts Anton",
+      "license": "OFL-1.1",
+      "license_file": "anton/OFL.txt",
+      "license_url": "https://scripts.sil.org/OFL",
+      "weight": "400",
+      "style": "normal",
+      "notes": "Downloaded from the Google Fonts GitHub repository. Commercial use is allowed under the SIL Open Font License; keep OFL.txt with redistributed font files.",
+      "downloaded_at": "2026-05-15 11:43:39"
+    },
+    {
+      "family": "Bebas Neue",
+      "file": "bebasneue/BebasNeue-Regular.ttf",
+      "source": "Google Fonts Bebas Neue",
+      "license": "OFL-1.1",
+      "license_file": "bebasneue/OFL.txt",
+      "license_url": "https://scripts.sil.org/OFL",
+      "weight": "400",
+      "style": "normal",
+      "notes": "Downloaded from the Google Fonts GitHub repository. Commercial use is allowed under the SIL Open Font License; keep OFL.txt with redistributed font files.",
+      "downloaded_at": "2026-05-15 11:43:38"
+    },
+    {
+      "family": "Inter",
+      "file": "inter/Inter[opsz,wght].ttf",
+      "source": "Google Fonts Inter",
+      "license": "OFL-1.1",
+      "license_file": "inter/OFL.txt",
+      "license_url": "https://scripts.sil.org/OFL",
+      "weight": "100 900",
+      "style": "normal",
+      "notes": "Downloaded from the Google Fonts GitHub repository. Commercial use is allowed under the SIL Open Font License; keep OFL.txt with redistributed font files.",
+      "downloaded_at": "2026-05-15 11:43:32"
+    },
+    {
+      "family": "Inter Black",
+      "file": "inter/Inter[opsz,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "inter/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Inter ExtraBold",
+      "file": "inter/Inter[opsz,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "inter/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Inter ExtraLight",
+      "file": "inter/Inter[opsz,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "inter/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Inter Light",
+      "file": "inter/Inter[opsz,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "inter/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Inter Medium",
+      "file": "inter/Inter[opsz,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "inter/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Inter SemiBold",
+      "file": "inter/Inter[opsz,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "inter/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Inter Thin",
+      "file": "inter/Inter[opsz,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "inter/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Lato",
+      "file": "lato/Lato-Bold.ttf",
+      "source": "Google Fonts Lato",
+      "license": "OFL-1.1",
+      "license_file": "lato/OFL.txt",
+      "license_url": "https://scripts.sil.org/OFL",
+      "weight": "700",
+      "style": "normal",
+      "notes": "Downloaded from the Google Fonts GitHub repository. Commercial use is allowed under the SIL Open Font License; keep OFL.txt with redistributed font files.",
+      "downloaded_at": "2026-05-15 11:43:40"
+    },
+    {
+      "family": "Lato",
+      "file": "lato/Lato-Regular.ttf",
+      "source": "Google Fonts Lato",
+      "license": "OFL-1.1",
+      "license_file": "lato/OFL.txt",
+      "license_url": "https://scripts.sil.org/OFL",
+      "weight": "400",
+      "style": "normal",
+      "notes": "Downloaded from the Google Fonts GitHub repository. Commercial use is allowed under the SIL Open Font License; keep OFL.txt with redistributed font files.",
+      "downloaded_at": "2026-05-15 11:43:40"
+    },
+    {
+      "family": "Merriweather",
+      "file": "merriweather/Merriweather[opsz,wdth,wght].ttf",
+      "source": "Google Fonts Merriweather",
+      "license": "OFL-1.1",
+      "license_file": "merriweather/OFL.txt",
+      "license_url": "https://scripts.sil.org/OFL",
+      "weight": "100 900",
+      "style": "normal",
+      "notes": "Downloaded from the Google Fonts GitHub repository. Commercial use is allowed under the SIL Open Font License; keep OFL.txt with redistributed font files.",
+      "downloaded_at": "2026-05-15 11:43:43"
+    },
+    {
+      "family": "Merriweather 18pt",
+      "file": "merriweather/Merriweather[opsz,wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "merriweather/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Merriweather Black 18pt",
+      "file": "merriweather/Merriweather[opsz,wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "merriweather/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Merriweather ExtraBold 18pt",
+      "file": "merriweather/Merriweather[opsz,wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "merriweather/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Merriweather Light 18pt",
+      "file": "merriweather/Merriweather[opsz,wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "merriweather/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Merriweather Medium 18pt",
+      "file": "merriweather/Merriweather[opsz,wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "merriweather/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Merriweather SemiBold 18pt",
+      "file": "merriweather/Merriweather[opsz,wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "merriweather/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Montserrat",
+      "file": "montserrat/Montserrat[wght].ttf",
+      "source": "Google Fonts Montserrat",
+      "license": "OFL-1.1",
+      "license_file": "montserrat/OFL.txt",
+      "license_url": "https://scripts.sil.org/OFL",
+      "weight": "100 900",
+      "style": "normal",
+      "notes": "Downloaded from the Google Fonts GitHub repository. Commercial use is allowed under the SIL Open Font License; keep OFL.txt with redistributed font files.",
+      "downloaded_at": "2026-05-15 11:43:34"
+    },
+    {
+      "family": "Montserrat Black",
+      "file": "montserrat/Montserrat[wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "montserrat/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Montserrat ExtraBold",
+      "file": "montserrat/Montserrat[wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "montserrat/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Montserrat ExtraLight",
+      "file": "montserrat/Montserrat[wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "montserrat/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Montserrat Light",
+      "file": "montserrat/Montserrat[wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "montserrat/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Montserrat Medium",
+      "file": "montserrat/Montserrat[wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "montserrat/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Montserrat SemiBold",
+      "file": "montserrat/Montserrat[wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "montserrat/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Montserrat Thin",
+      "file": "montserrat/Montserrat[wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "montserrat/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Noto Sans",
+      "file": "notosans/NotoSans[wdth,wght].ttf",
+      "source": "Google Fonts Noto Sans",
+      "license": "OFL-1.1",
+      "license_file": "notosans/OFL.txt",
+      "license_url": "https://scripts.sil.org/OFL",
+      "weight": "100 900",
+      "style": "normal",
+      "notes": "Downloaded from the Google Fonts GitHub repository. Commercial use is allowed under the SIL Open Font License; keep OFL.txt with redistributed font files.",
+      "downloaded_at": "2026-05-15 11:43:31"
+    },
+    {
+      "family": "Noto Sans Black",
+      "file": "notosans/NotoSans[wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "notosans/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Noto Sans ExtraBold",
+      "file": "notosans/NotoSans[wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "notosans/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Noto Sans ExtraLight",
+      "file": "notosans/NotoSans[wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "notosans/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Noto Sans Light",
+      "file": "notosans/NotoSans[wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "notosans/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Noto Sans Medium",
+      "file": "notosans/NotoSans[wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "notosans/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Noto Sans SC",
+      "file": "notosanssc/NotoSansSC[wght].ttf",
+      "source": "Google Fonts Noto Sans SC",
+      "license": "OFL-1.1",
+      "license_file": "notosanssc/OFL.txt",
+      "license_url": "https://scripts.sil.org/OFL",
+      "weight": "100 900",
+      "style": "normal",
+      "notes": "Downloaded from the Google Fonts GitHub repository. Commercial use is allowed under the SIL Open Font License; keep OFL.txt with redistributed font files.",
+      "downloaded_at": "2026-05-15 11:43:15"
+    },
+    {
+      "family": "Noto Sans SC Black",
+      "file": "notosanssc/NotoSansSC[wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "notosanssc/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Noto Sans SC ExtraBold",
+      "file": "notosanssc/NotoSansSC[wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "notosanssc/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Noto Sans SC ExtraLight",
+      "file": "notosanssc/NotoSansSC[wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "notosanssc/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Noto Sans SC Light",
+      "file": "notosanssc/NotoSansSC[wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "notosanssc/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Noto Sans SC Medium",
+      "file": "notosanssc/NotoSansSC[wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "notosanssc/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Noto Sans SC SemiBold",
+      "file": "notosanssc/NotoSansSC[wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "notosanssc/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Noto Sans SC Thin",
+      "file": "notosanssc/NotoSansSC[wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "notosanssc/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Noto Sans SemiBold",
+      "file": "notosans/NotoSans[wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "notosans/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Noto Sans Thin",
+      "file": "notosans/NotoSans[wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "notosans/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Noto Serif SC",
+      "file": "notoserifsc/NotoSerifSC[wght].ttf",
+      "source": "Google Fonts Noto Serif SC",
+      "license": "OFL-1.1",
+      "license_file": "notoserifsc/OFL.txt",
+      "license_url": "https://scripts.sil.org/OFL",
+      "weight": "100 900",
+      "style": "normal",
+      "notes": "Downloaded from the Google Fonts GitHub repository. Commercial use is allowed under the SIL Open Font License; keep OFL.txt with redistributed font files.",
+      "downloaded_at": "2026-05-15 11:43:29"
+    },
+    {
+      "family": "Noto Serif SC Black",
+      "file": "notoserifsc/NotoSerifSC[wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "notoserifsc/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Noto Serif SC ExtraBold",
+      "file": "notoserifsc/NotoSerifSC[wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "notoserifsc/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Noto Serif SC ExtraLight",
+      "file": "notoserifsc/NotoSerifSC[wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "notoserifsc/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Noto Serif SC Light",
+      "file": "notoserifsc/NotoSerifSC[wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "notoserifsc/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Noto Serif SC Medium",
+      "file": "notoserifsc/NotoSerifSC[wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "notoserifsc/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Noto Serif SC SemiBold",
+      "file": "notoserifsc/NotoSerifSC[wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "notoserifsc/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Open Sans",
+      "file": "opensans/OpenSans[wdth,wght].ttf",
+      "source": "Google Fonts Open Sans",
+      "license": "OFL-1.1",
+      "license_file": "opensans/OFL.txt",
+      "license_url": "https://scripts.sil.org/OFL",
+      "weight": "100 900",
+      "style": "normal",
+      "notes": "Downloaded from the Google Fonts GitHub repository. Commercial use is allowed under the SIL Open Font License; keep OFL.txt with redistributed font files.",
+      "downloaded_at": "2026-05-15 11:43:33"
+    },
+    {
+      "family": "Open Sans Condensed",
+      "file": "opensans/OpenSans[wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "opensans/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Open Sans Condensed ExtraBold",
+      "file": "opensans/OpenSans[wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "opensans/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Open Sans Condensed Light",
+      "file": "opensans/OpenSans[wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "opensans/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Open Sans Condensed SemiBold",
+      "file": "opensans/OpenSans[wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "opensans/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Open Sans ExtraBold",
+      "file": "opensans/OpenSans[wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "opensans/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Open Sans Light",
+      "file": "opensans/OpenSans[wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "opensans/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Open Sans SemiBold",
+      "file": "opensans/OpenSans[wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "opensans/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Oswald",
+      "file": "oswald/Oswald[wght].ttf",
+      "source": "Google Fonts Oswald",
+      "license": "OFL-1.1",
+      "license_file": "oswald/OFL.txt",
+      "license_url": "https://scripts.sil.org/OFL",
+      "weight": "100 900",
+      "style": "normal",
+      "notes": "Downloaded from the Google Fonts GitHub repository. Commercial use is allowed under the SIL Open Font License; keep OFL.txt with redistributed font files.",
+      "downloaded_at": "2026-05-15 11:43:37"
+    },
+    {
+      "family": "Oswald ExtraLight",
+      "file": "oswald/Oswald[wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "oswald/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Oswald Light",
+      "file": "oswald/Oswald[wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "oswald/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Oswald Medium",
+      "file": "oswald/Oswald[wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "oswald/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Oswald SemiBold",
+      "file": "oswald/Oswald[wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "oswald/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Poppins",
+      "file": "poppins/Poppins-Bold.ttf",
+      "source": "Google Fonts Poppins",
+      "license": "OFL-1.1",
+      "license_file": "poppins/OFL.txt",
+      "license_url": "https://scripts.sil.org/OFL",
+      "weight": "700",
+      "style": "normal",
+      "notes": "Downloaded from the Google Fonts GitHub repository. Commercial use is allowed under the SIL Open Font License; keep OFL.txt with redistributed font files.",
+      "downloaded_at": "2026-05-15 11:43:36"
+    },
+    {
+      "family": "Poppins",
+      "file": "poppins/Poppins-Regular.ttf",
+      "source": "Google Fonts Poppins",
+      "license": "OFL-1.1",
+      "license_file": "poppins/OFL.txt",
+      "license_url": "https://scripts.sil.org/OFL",
+      "weight": "400",
+      "style": "normal",
+      "notes": "Downloaded from the Google Fonts GitHub repository. Commercial use is allowed under the SIL Open Font License; keep OFL.txt with redistributed font files.",
+      "downloaded_at": "2026-05-15 11:43:36"
+    },
+    {
+      "family": "Source Code Pro",
+      "file": "sourcecodepro/SourceCodeVF-Upright.ttf",
+      "source": "Adobe Source Code Pro",
+      "version": "2.042R-u/1.062R-i/1.026R-vf",
+      "license": "OFL-1.1",
+      "license_file": "sourcecodepro/LICENSE.md",
+      "license_url": "https://scripts.sil.org/OFL",
+      "weight": "200 900",
+      "style": "normal",
+      "notes": "Downloaded from Adobe's official open-source font GitHub releases. Commercial use is allowed under the SIL Open Font License; keep the license file with redistributed font files.",
+      "downloaded_at": "2026-05-15 11:50:00"
+    },
+    {
+      "family": "Source Han Sans SC",
+      "file": "sourcehansanssc/SourceHanSansSC-Bold.otf",
+      "source": "Adobe Source Han Sans",
+      "version": "2.005R",
+      "license": "OFL-1.1",
+      "license_file": "sourcehansanssc/LICENSE.txt",
+      "license_url": "https://scripts.sil.org/OFL",
+      "weight": "700",
+      "style": "normal",
+      "notes": "Downloaded from Adobe's official open-source font GitHub releases. Commercial use is allowed under the SIL Open Font License; keep the license file with redistributed font files.",
+      "downloaded_at": "2026-05-15 11:49:39"
+    },
+    {
+      "family": "Source Han Sans SC",
+      "file": "sourcehansanssc/SourceHanSansSC-Regular.otf",
+      "source": "Adobe Source Han Sans",
+      "version": "2.005R",
+      "license": "OFL-1.1",
+      "license_file": "sourcehansanssc/LICENSE.txt",
+      "license_url": "https://scripts.sil.org/OFL",
+      "weight": "400",
+      "style": "normal",
+      "notes": "Downloaded from Adobe's official open-source font GitHub releases. Commercial use is allowed under the SIL Open Font License; keep the license file with redistributed font files.",
+      "downloaded_at": "2026-05-15 11:49:39"
+    },
+    {
+      "family": "Source Han Serif SC",
+      "file": "sourcehanserifsc/SourceHanSerifSC-Bold.otf",
+      "source": "Adobe Source Han Serif",
+      "version": "2.003R",
+      "license": "OFL-1.1",
+      "license_file": "sourcehanserifsc/LICENSE.txt",
+      "license_url": "https://scripts.sil.org/OFL",
+      "weight": "700",
+      "style": "normal",
+      "notes": "Downloaded from Adobe's official open-source font GitHub releases. Commercial use is allowed under the SIL Open Font License; keep the license file with redistributed font files.",
+      "downloaded_at": "2026-05-15 11:49:55"
+    },
+    {
+      "family": "Source Han Serif SC",
+      "file": "sourcehanserifsc/SourceHanSerifSC-Regular.otf",
+      "source": "Adobe Source Han Serif",
+      "version": "2.003R",
+      "license": "OFL-1.1",
+      "license_file": "sourcehanserifsc/LICENSE.txt",
+      "license_url": "https://scripts.sil.org/OFL",
+      "weight": "400",
+      "style": "normal",
+      "notes": "Downloaded from Adobe's official open-source font GitHub releases. Commercial use is allowed under the SIL Open Font License; keep the license file with redistributed font files.",
+      "downloaded_at": "2026-05-15 11:49:54"
+    },
+    {
+      "family": "Source Sans 3",
+      "file": "sourcesans3/SourceSans3VF-Upright.ttf",
+      "source": "Adobe Source Sans 3",
+      "version": "3.052R",
+      "license": "OFL-1.1",
+      "license_file": "sourcesans3/LICENSE.md",
+      "license_url": "https://scripts.sil.org/OFL",
+      "weight": "200 900",
+      "style": "normal",
+      "notes": "Downloaded from Adobe's official open-source font GitHub releases. Commercial use is allowed under the SIL Open Font License; keep the license file with redistributed font files.",
+      "downloaded_at": "2026-05-15 11:49:55"
+    },
+    {
+      "family": "Source Serif 4",
+      "file": "sourceserif4/SourceSerif4Variable-Roman.ttf",
+      "source": "Adobe Source Serif 4",
+      "version": "4.005R",
+      "license": "OFL-1.1",
+      "license_file": "sourceserif4/LICENSE.md",
+      "license_url": "https://scripts.sil.org/OFL",
+      "weight": "200 900",
+      "style": "normal",
+      "notes": "Downloaded from Adobe's official open-source font GitHub releases. Commercial use is allowed under the SIL Open Font License; keep the license file with redistributed font files.",
+      "downloaded_at": "2026-05-15 11:49:59"
+    },
+    {
+      "family": "Source Serif 4 Variable",
+      "file": "sourceserif4/SourceSerif4Variable-Roman.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourceserif4/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Source Serif 4 Variable Black",
+      "file": "sourceserif4/SourceSerif4Variable-Roman.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourceserif4/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Source Serif 4 Variable Caption",
+      "file": "sourceserif4/SourceSerif4Variable-Roman.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourceserif4/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Source Serif 4 Variable Caption Black",
+      "file": "sourceserif4/SourceSerif4Variable-Roman.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourceserif4/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Source Serif 4 Variable Caption ExtraLight",
+      "file": "sourceserif4/SourceSerif4Variable-Roman.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourceserif4/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Source Serif 4 Variable Caption Light",
+      "file": "sourceserif4/SourceSerif4Variable-Roman.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourceserif4/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Source Serif 4 Variable Caption Semibold",
+      "file": "sourceserif4/SourceSerif4Variable-Roman.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourceserif4/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Source Serif 4 Variable Display",
+      "file": "sourceserif4/SourceSerif4Variable-Roman.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourceserif4/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Source Serif 4 Variable Display Black",
+      "file": "sourceserif4/SourceSerif4Variable-Roman.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourceserif4/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Source Serif 4 Variable Display ExtraLight",
+      "file": "sourceserif4/SourceSerif4Variable-Roman.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourceserif4/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Source Serif 4 Variable Display Light",
+      "file": "sourceserif4/SourceSerif4Variable-Roman.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourceserif4/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Source Serif 4 Variable Display Semibold",
+      "file": "sourceserif4/SourceSerif4Variable-Roman.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourceserif4/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Source Serif 4 Variable ExtraLight",
+      "file": "sourceserif4/SourceSerif4Variable-Roman.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourceserif4/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Source Serif 4 Variable Light",
+      "file": "sourceserif4/SourceSerif4Variable-Roman.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourceserif4/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Source Serif 4 Variable Semibold",
+      "file": "sourceserif4/SourceSerif4Variable-Roman.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourceserif4/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Source Serif 4 Variable SmallText",
+      "file": "sourceserif4/SourceSerif4Variable-Roman.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourceserif4/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Source Serif 4 Variable SmallText Black",
+      "file": "sourceserif4/SourceSerif4Variable-Roman.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourceserif4/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Source Serif 4 Variable SmallText ExtraLight",
+      "file": "sourceserif4/SourceSerif4Variable-Roman.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourceserif4/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Source Serif 4 Variable SmallText Light",
+      "file": "sourceserif4/SourceSerif4Variable-Roman.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourceserif4/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Source Serif 4 Variable SmallText Semibold",
+      "file": "sourceserif4/SourceSerif4Variable-Roman.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourceserif4/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Source Serif 4 Variable Subhead",
+      "file": "sourceserif4/SourceSerif4Variable-Roman.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourceserif4/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Source Serif 4 Variable Subhead Black",
+      "file": "sourceserif4/SourceSerif4Variable-Roman.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourceserif4/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Source Serif 4 Variable Subhead ExtraLight",
+      "file": "sourceserif4/SourceSerif4Variable-Roman.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourceserif4/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Source Serif 4 Variable Subhead Light",
+      "file": "sourceserif4/SourceSerif4Variable-Roman.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourceserif4/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "Source Serif 4 Variable Subhead Semibold",
+      "file": "sourceserif4/SourceSerif4Variable-Roman.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourceserif4/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "SourceCodeVF",
+      "file": "sourcecodepro/SourceCodeVF-Upright.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourcecodepro/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "SourceCodeVF Black",
+      "file": "sourcecodepro/SourceCodeVF-Upright.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourcecodepro/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "SourceCodeVF ExtraLight",
+      "file": "sourcecodepro/SourceCodeVF-Upright.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourcecodepro/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "SourceCodeVF Light",
+      "file": "sourcecodepro/SourceCodeVF-Upright.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourcecodepro/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "SourceCodeVF Medium",
+      "file": "sourcecodepro/SourceCodeVF-Upright.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourcecodepro/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "SourceCodeVF Semibold",
+      "file": "sourcecodepro/SourceCodeVF-Upright.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourcecodepro/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "SourceSans3VF",
+      "file": "sourcesans3/SourceSans3VF-Upright.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourcesans3/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "SourceSans3VF Black",
+      "file": "sourcesans3/SourceSans3VF-Upright.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourcesans3/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "SourceSans3VF ExtraLight",
+      "file": "sourcesans3/SourceSans3VF-Upright.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourcesans3/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "SourceSans3VF Light",
+      "file": "sourcesans3/SourceSans3VF-Upright.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourcesans3/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "SourceSans3VF Medium",
+      "file": "sourcesans3/SourceSans3VF-Upright.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourcesans3/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "SourceSans3VF Semibold",
+      "file": "sourcesans3/SourceSans3VF-Upright.ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "sourcesans3/LICENSE.md",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    }
+  ]
+}

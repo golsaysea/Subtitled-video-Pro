@@ -1,0 +1,14 @@
+Subtitle Composer / Subtitled Video Pro
+SPDX-License-Identifier: GPL-3.0-only
+
+This project is prepared for open-source distribution under the GNU General
+Public License, version 3.0 only.
+
+Canonical license text:
+https://www.gnu.org/licenses/gpl-3.0.txt
+
+Compliance note:
+The project uses PyQt6 and PyQt6-WebEngine from PyPI, whose open-source
+distribution path is GPL-3.0-only. If the project owner holds a valid Riverbank
+commercial license for PyQt/PyQt-WebEngine, a different project license may be
+chosen and this file should be updated before release.

@@ -1,0 +1,40 @@
+# Dependency License List
+
+> Generated: 2026-05-16
+> Audit guide: https://tpscsm-docs.pages.dev/license-audit/
+> Scope: Direct runtime dependencies only. Development/build-only tools and bundled assets are listed separately.
+
+## Summary
+
+| License | Count | Risk |
+| --- | ---: | --- |
+| GPL-3.0-only | 2 | High attention: strong copyleft, requires GPL-compatible project distribution unless commercial PyQt/PyQt-WebEngine license is held |
+| Apache-2.0 | 2 | Low: permissive, keep license and notices |
+
+Total direct runtime dependencies: 4
+
+## Direct Dependency Details
+
+| No. | Dependency | Version | Ecosystem | License (SPDX) | Source | Status | Open Source Status | Risk | Notes |
+| ---: | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | PyQt6 | 6.11.0 | PyPI | GPL-3.0-only or Riverbank commercial license | https://pypi.org/project/PyQt6/ | Confirmed | Open source under GPL; commercial alternative available | High attention | PyPI GPL build requires project distribution under GPL-3.0-compatible terms, unless a commercial PyQt license is used |
+| 2 | PyQt6-WebEngine | 6.11.0 | PyPI | GPL-3.0-only or Riverbank commercial license | https://pypi.org/project/PyQt6-WebEngine/ | Confirmed | Open source under GPL; commercial alternative available | High attention | Riverbank states PyQt-WebEngine is not available under LGPL |
+| 3 | requests | 2.34.2 | PyPI | Apache-2.0 | https://pypi.org/project/requests/ | Confirmed | Open source | Low | Keep Apache-2.0 attribution and notices |
+| 4 | playwright | 1.59.0 | PyPI | Apache-2.0 | https://pypi.org/project/playwright/ | Confirmed | Open source | Low | Keep Apache-2.0 attribution and notices |
+
+## Publication-Relevant Components Outside Direct Runtime Dependency Scope
+
+These components are not counted in the direct dependency total above, but they affect release compliance and should be tracked for GitHub distribution.
+
+| Component | Current Use | License / Notice | Source | Release Impact |
+| --- | --- | --- | --- | --- |
+| Open font pack | 21 bundled font files recorded in `fonts/open/open_fonts_manifest.json` | OFL-1.1 or compatible open font license | Google Fonts GitHub repository and Adobe open-source font releases | Keep each font license file next to redistributed font files. Do not rename modified OFL fonts using reserved font names |
+| FFmpeg BtbN GPL build | Code downloads `ffmpeg-master-latest-win64-gpl.zip` on demand | GPL variant of FFmpeg build; BtbN build scripts are MIT, packaged FFmpeg binaries include GPL/LGPL components | https://github.com/BtbN/FFmpeg-Builds | Do not silently bundle without preserving notices and source-offer requirements. Prefer documenting user-managed FFmpeg download or switching to an LGPL build if GPL distribution is not intended |
+| PyInstaller | GitHub Actions build tool for Windows artifact | GPL-2.0-or-later with bootloader exception | https://pyinstaller.org/en/stable/license.html | Build outputs may be shipped under the project/dependency-compatible license; still keep build provenance |
+| Playwright browsers | Browser runtime installed during release build | Chromium/browser component licenses | https://playwright.dev/python/ | If browsers are bundled into the PyInstaller output, keep browser notices under review |
+
+## Compliance Baseline
+
+Because the current direct GUI dependencies include `PyQt6` and `PyQt6-WebEngine` from PyPI under `GPL-3.0-only`, the open-source distribution baseline for this repository is `GPL-3.0-only`.
+
+If the project owner has a Riverbank commercial PyQt/PyQt-WebEngine license, the project may choose a different project license, but that commercial entitlement is outside this automated audit and must be documented separately before release.
