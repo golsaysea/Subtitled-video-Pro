@@ -27,7 +27,7 @@ from PyQt6.QtWebChannel import QWebChannel
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtCore import QRectF
 
-from timeline_engine import TimelineHeader, AdvancedTimeline
+from timeline_engine import TimelineHeader, AdvancedTimeline, TRACK_H, HEADER_H
 from core import get_ffmpeg_cmd, get_ffprobe_cmd, get_app_dir, FFMPEG_DOWNLOAD_URL, download_file_with_progress
 from app_theme import apply_tinted_styles
 from ui_components import (hex_to_rgb, get_exact_duration, get_video_dimensions,
@@ -341,6 +341,7 @@ class EditView(QWidget):
 
         # ================= 1. 左侧面板 =================
         left_panel = QFrame(); left_panel.setStyleSheet("background-color: #181825; border-radius: 8px;"); left_layout = QVBoxLayout(left_panel)
+        left_panel.setMinimumWidth(220)
         left_layout.setSpacing(8)
 
         top_btn_row = QHBoxLayout()
@@ -686,17 +687,33 @@ class EditView(QWidget):
         self.insp_stack.addWidget(page_empty); self.insp_stack.addWidget(insp_scroll); self.insp_stack.addWidget(page_vid); self.insp_stack.addWidget(page_aud)
         self.tabs.addTab(tab_subs, "📝 精修"); self.tabs.addTab(self.insp_stack, "🎛️ 检查器"); right_layout.addWidget(self.tabs)
 
-        timeline_outer = QFrame(); timeline_outer.setStyleSheet("background-color: #1e1e2e; border-radius: 8px;"); tl_outer_layout = QHBoxLayout(timeline_outer); tl_outer_layout.setContentsMargins(0,0,0,0); tl_outer_layout.setSpacing(0)
+        timeline_outer = QFrame(); timeline_outer.setStyleSheet("background-color: #1e1e2e; border-radius: 8px;"); timeline_outer.setMinimumHeight(HEADER_H + TRACK_H * 6 + 18); tl_outer_layout = QHBoxLayout(timeline_outer); tl_outer_layout.setContentsMargins(0,0,0,0); tl_outer_layout.setSpacing(0)
         self.tl_header = TimelineHeader(controller=self); tl_outer_layout.addWidget(self.tl_header)
         self.timeline_widget = AdvancedTimeline(controller=self); tl_outer_layout.addWidget(self.timeline_widget, stretch=1)
         
-        top_h_splitter.addWidget(left_panel)
+        left_scroll = QScrollArea()
+        left_scroll.setWidgetResizable(True)
+        left_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        left_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        left_scroll.setMinimumWidth(220)
+        left_scroll.setStyleSheet("QScrollArea { background-color: #181825; border: none; border-radius: 8px; }")
+        left_scroll.setWidget(left_panel)
+        center_panel.setMinimumWidth(320)
+        right_panel.setMinimumWidth(300)
+
+        top_h_splitter.addWidget(left_scroll)
         top_h_splitter.addWidget(center_panel)
         top_h_splitter.addWidget(right_panel)
+        top_h_splitter.setStretchFactor(0, 0)
+        top_h_splitter.setStretchFactor(1, 3)
+        top_h_splitter.setStretchFactor(2, 2)
         top_h_splitter.setSizes([280, 780, 500]) 
 
         main_v_splitter.addWidget(top_h_splitter) 
         main_v_splitter.addWidget(timeline_outer) 
+        main_v_splitter.setStretchFactor(0, 1)
+        main_v_splitter.setStretchFactor(1, 0)
+        main_v_splitter.setCollapsible(1, False)
         main_v_splitter.setSizes([700, 250])      
         
         main_layout.addWidget(main_v_splitter)

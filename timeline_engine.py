@@ -1,7 +1,7 @@
 # ==========================================
 # 文件名: timeline_engine.py (无损升级版：6轨道平铺引擎)
 # ==========================================
-from PyQt6.QtWidgets import QGraphicsScene, QGraphicsView, QGraphicsRectItem, QGraphicsItem, QWidget
+from PyQt6.QtWidgets import QGraphicsScene, QGraphicsView, QGraphicsRectItem, QGraphicsItem, QWidget, QSizePolicy
 from PyQt6.QtCore import Qt, QRectF, QObject, pyqtSignal, pyqtSlot, QPointF
 from PyQt6.QtGui import QBrush, QColor, QPen, QPainter, QFont
 import os
@@ -30,7 +30,7 @@ def _timeline_colors(controller=None):
 
 class TimelineHeader(QWidget):
     def __init__(self, parent=None, controller=None):
-        super().__init__(parent); self.controller = controller; self.setFixedWidth(80); self.TRACK_H = TRACK_H 
+        super().__init__(parent); self.controller = controller; self.setFixedWidth(80); self.setMinimumHeight(HEADER_H + TRACK_H * 6 + 16); self.TRACK_H = TRACK_H
         
     def paintEvent(self, event):
         c = _timeline_colors(self.controller)
@@ -168,7 +168,20 @@ class PlayheadItem(QGraphicsItem):
 
 class AdvancedTimeline(QGraphicsView):
     def __init__(self, controller):
-        super().__init__(); self.controller = controller; self.scene = QGraphicsScene(self); self.setScene(self.scene); self.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop); self.setRenderHint(QPainter.RenderHint.Antialiasing); self.setStyleSheet("background-color: #11111b; border: none;"); self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff); self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff); self.playhead = PlayheadItem(800, controller); self.scene.addItem(self.playhead); self.is_scrubbing = False
+        super().__init__()
+        self.controller = controller
+        self.scene = QGraphicsScene(self)
+        self.setScene(self.scene)
+        self.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        self.setRenderHint(QPainter.RenderHint.Antialiasing)
+        self.setStyleSheet("background-color: #11111b; border: none;")
+        self.setMinimumHeight(HEADER_H + TRACK_H * 6 + 16)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.playhead = PlayheadItem(800, controller)
+        self.scene.addItem(self.playhead)
+        self.is_scrubbing = False
 
     def drawBackground(self, painter, rect):
         super().drawBackground(painter, rect); pps = self.controller.zoom_factor; dur = max(10.0, self.controller.state.get("duration", 10.0)); w = max(rect.width(), dur * pps + 200); self.scene.setSceneRect(0, 0, w, 300)

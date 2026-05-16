@@ -22,6 +22,7 @@ from playwright.sync_api import sync_playwright
 from core import get_ffmpeg_cmd
 from app_theme import apply_tinted_styles
 from render_config import build_video_encoder_args, get_render_profile
+from render_timing import build_subtitle_frame_schedule, subtitle_supersample
 # 确保导入了 get_exact_duration
 from ui_components import (
     get_exact_duration, get_video_dimensions, render_subtitle_html,
@@ -34,7 +35,7 @@ from project_io import create_reel, sync_project_assets_to_project_dir, update_r
 from workspace_config import WORKSPACE_MODE_CLOUD, get_active_workspace, get_workspace_config
 
 PRESETS_FILE = os.path.join(os.getcwd(), "style_presets.json") 
-SUBTITLE_SUPERSAMPLE = 2
+SUBTITLE_SUPERSAMPLE = subtitle_supersample()
 
 def natural_sort_key(path_or_name):
     name = os.path.basename(path_or_name or "")
@@ -114,6 +115,18 @@ def get_browser_path():
     for p in paths:
         if os.path.exists(p): return p
     return None
+
+def chromium_render_args():
+    if os.environ.get("SUBTITLE_FORCE_SOFTWARE_RENDERING", "").strip() == "1":
+        return ["--disable-gpu", "--disable-gpu-compositing", "--disable-gpu-rasterization"]
+    return ["--ignore-gpu-blocklist", "--enable-gpu-rasterization", "--num-raster-threads=4"]
+
+def launch_render_browser(playwright):
+    kwargs = {"headless": True, "args": chromium_render_args()}
+    b_path = get_browser_path()
+    if b_path:
+        kwargs["executable_path"] = b_path
+    return playwright.chromium.launch(**kwargs)
 
 class BatchTaskRow(QFrame):
     def __init__(self, parent_view=None, parent=None):
@@ -304,8 +317,7 @@ class BatchTaskRow(QFrame):
             
             # 4. 用 Playwright 渲染透明字幕截图（带抗锯齿）
             with sync_playwright() as p:
-                b_path = get_browser_path()
-                browser = p.chromium.launch(headless=True, executable_path=b_path) if b_path else p.chromium.launch(headless=True)
+                browser = launch_render_browser(p)
                 render_w = int(proj_w * SUBTITLE_SUPERSAMPLE)
                 render_h = int(proj_h * SUBTITLE_SUPERSAMPLE)
                 page = browser.new_page(viewport={"width": render_w, "height": render_h}, device_scale_factor=1)
@@ -1342,8 +1354,7 @@ class BatchView(QWidget):
             total_dur = self._aligned_total_duration(v_dur, a_dur, a_mode)
 
             with sync_playwright() as p:
-                b_path = get_browser_path()
-                browser = p.chromium.launch(headless=True, executable_path=b_path) if b_path else p.chromium.launch(headless=True)
+                browser = launch_render_browser(p)
                 render_w = int(proj_w * SUBTITLE_SUPERSAMPLE)
                 render_h = int(proj_h * SUBTITLE_SUPERSAMPLE)
                 page = browser.new_page(viewport={"width": render_w, "height": render_h}, device_scale_factor=1)
@@ -1351,8 +1362,10 @@ class BatchView(QWidget):
                 page.screenshot(path=blank_path, omit_background=True, scale="css")
 
                 with open(concat_path, "w", encoding="utf-8") as f_concat:
-                    current_time = 0.0; frame_idx = 0; frame_step = 1.0 / 30.0
+                    frame_idx = 0
                     last_concat_file = blank_path
+                    frame_schedule = build_subtitle_frame_schedule(subs_data, total_dur)
+                    self.sig_log.emit(f"  ⚡ 字幕渲染采样: {len(frame_schedule)} 段，超采样 x{SUBTITLE_SUPERSAMPLE}", "#89b4fa")
 
                     def write_subtitle_frame(path, duration):
                         nonlocal last_concat_file
@@ -1361,18 +1374,13 @@ class BatchView(QWidget):
                         f_concat.write(f"duration {duration:.3f}\n")
                         last_concat_file = path
                     
-                    while current_time < total_dur:
-                        active_subs = [s for s in subs_data if float(s.get('start', 0)) <= current_time <= float(s.get('end', 1))]
+                    for current_time, frame_duration in frame_schedule:
+                        active_subs = [
+                            s for s in subs_data
+                            if float(s.get('start', 0)) <= current_time < float(s.get('end', 1))
+                        ]
                         if not active_subs:
-                            future_starts = [float(s.get('start', 0)) for s in subs_data if float(s.get('start', 0)) > current_time]
-                            if future_starts:
-                                next_start = min(future_starts)
-                                write_subtitle_frame(blank_path, next_start - current_time)
-                                current_time = next_start
-                            else:
-                                gap = total_dur - current_time
-                                if gap > 0: write_subtitle_frame(blank_path, gap)
-                                current_time = total_dur
+                            write_subtitle_frame(blank_path, frame_duration)
                             continue
                         
                         html_subs = ""
@@ -1387,8 +1395,8 @@ class BatchView(QWidget):
                         page.set_content(html_content)
                         frame_path = os.path.join(temp_dir, f"f_{frame_idx}.png").replace("\\", "/")
                         page.screenshot(path=frame_path, omit_background=True, scale="css")
-                        write_subtitle_frame(frame_path, frame_step)
-                        current_time += frame_step; frame_idx += 1
+                        write_subtitle_frame(frame_path, frame_duration)
+                        frame_idx += 1
 
                     f_concat.write(f"file '{last_concat_file}'\n")
                         

@@ -5,20 +5,26 @@ import sys
 import os
 import threading
 
-os.environ["QT_OPENGL"] = "software"
 os.environ["QTWEBENGINE_DISABLE_SANDBOX"] = "1"
+
+FORCE_SOFTWARE_RENDERING = os.environ.get("SUBTITLE_FORCE_SOFTWARE_RENDERING", "").strip() == "1"
 
 if sys.platform == "win32":
     os.environ["QT_GL_ADAPTER_TYPE"] = "any"
 
-os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (
-    "--ignore-gpu-blocklist "
-    "--num-raster-threads=4 "
-    "--disable-gpu "
-    "--disable-gpu-compositing "
-    "--disable-gpu-rasterization "
-    "--disable-software-rasterizer"
-)
+chromium_flags = ["--ignore-gpu-blocklist", "--num-raster-threads=4"]
+if FORCE_SOFTWARE_RENDERING:
+    os.environ["QT_OPENGL"] = "software"
+    chromium_flags.extend([
+        "--disable-gpu",
+        "--disable-gpu-compositing",
+        "--disable-gpu-rasterization",
+    ])
+else:
+    os.environ.setdefault("QT_OPENGL", "angle" if sys.platform == "win32" else "desktop")
+    chromium_flags.append("--enable-gpu-rasterization")
+
+os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = " ".join(chromium_flags)
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout,
@@ -44,7 +50,7 @@ class SubtitledvideoPro(QMainWindow):
     def __init__(self, project_data):
         super().__init__()
         self.setWindowTitle("Subtitle Video Pro - 工程房间版")
-        self.resize(1600, 980)
+        self.fit_initial_window_to_screen()
         self.setStyleSheet("background-color: #11111b; color: #cdd6f4;")
 
         self.project = project_data or {}
@@ -67,6 +73,24 @@ class SubtitledvideoPro(QMainWindow):
         self.create_sidebar()
         self.create_rooms()
         self.open_default_room()
+
+    def fit_initial_window_to_screen(self):
+        screen = QApplication.primaryScreen()
+        if not screen:
+            self.resize(1360, 860)
+            return
+
+        available = screen.availableGeometry()
+        max_w = max(640, available.width() - 32)
+        max_h = max(480, available.height() - 40)
+        width = min(1600, max(960, int(available.width() * 0.94)), max_w)
+        height = min(980, max(660, int(available.height() * 0.90)), max_h)
+        self.setMinimumSize(min(900, max_w), min(600, max_h))
+        self.resize(width, height)
+        self.move(
+            available.x() + max(0, (available.width() - width) // 2),
+            available.y() + max(0, (available.height() - height) // 2),
+        )
 
     def create_topbar(self):
         self.topbar = QWidget()

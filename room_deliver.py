@@ -18,6 +18,7 @@ from PyQt6.QtGui import QPixmap, QCursor
 from core import get_ffmpeg_cmd
 from app_theme import apply_tinted_styles
 from render_config import build_video_encoder_args, get_render_profile
+from render_timing import build_subtitle_frame_schedule, subtitle_supersample
 from playwright.sync_api import sync_playwright
 
 from font_assets import font_face_css
@@ -28,7 +29,7 @@ from project_audit import audit_project, format_project_audit_report
 from font_registry import STATUS_NONCOMMERCIAL
 
 CACHE_FILE = os.path.join(tempfile.gettempdir(), "sh_v8_project_cache.json")
-SUBTITLE_SUPERSAMPLE = 2
+SUBTITLE_SUPERSAMPLE = subtitle_supersample()
 
 
 def get_browser_path():
@@ -45,6 +46,20 @@ def get_browser_path():
         if os.path.exists(p):
             return p
     return None
+
+
+def chromium_render_args():
+    if os.environ.get("SUBTITLE_FORCE_SOFTWARE_RENDERING", "").strip() == "1":
+        return ["--disable-gpu", "--disable-gpu-compositing", "--disable-gpu-rasterization"]
+    return ["--ignore-gpu-blocklist", "--enable-gpu-rasterization", "--num-raster-threads=4"]
+
+
+def launch_render_browser(playwright):
+    kwargs = {"headless": True, "args": chromium_render_args()}
+    b_path = get_browser_path()
+    if b_path:
+        kwargs["executable_path"] = b_path
+    return playwright.chromium.launch(**kwargs)
 
 
 class ProjectPickCard(QFrame):
@@ -695,8 +710,7 @@ class DeliverView(QWidget):
                 proj_w, proj_h = 1080, 1080
 
             with sync_playwright() as p:
-                b_path = get_browser_path()
-                browser = p.chromium.launch(headless=True, executable_path=b_path) if b_path else p.chromium.launch(headless=True)
+                browser = launch_render_browser(p)
                 render_w = int(proj_w * SUBTITLE_SUPERSAMPLE)
                 render_h = int(proj_h * SUBTITLE_SUPERSAMPLE)
                 page = browser.new_page(viewport={"width": render_w, "height": render_h}, device_scale_factor=1)
@@ -705,11 +719,13 @@ class DeliverView(QWidget):
                 bundled_font_css = font_face_css()
 
                 with open(self.concat_path, "w", encoding="utf-8") as f_concat:
-                    current_time = 0.0
                     frame_idx = 0
-                    fps = 30
-                    frame_step = 1.0 / fps
                     last_concat_file = blank_path
+                    frame_schedule = build_subtitle_frame_schedule(subs_data, total_dur)
+                    self.log_safe(
+                        f"⚡ 字幕渲染采样: {len(frame_schedule)} 段，超采样 x{SUBTITLE_SUPERSAMPLE}",
+                        "#89b4fa",
+                    )
 
                     def write_subtitle_frame(path, duration):
                         nonlocal last_concat_file
@@ -718,20 +734,14 @@ class DeliverView(QWidget):
                         f_concat.write(f"duration {duration:.3f}\n")
                         last_concat_file = path
 
-                    while current_time < total_dur:
-                        active_subs = [s for s in subs_data if float(s.get('start', 0)) <= current_time <= float(s.get('end', 1))]
+                    for current_time, frame_duration in frame_schedule:
+                        active_subs = [
+                            s for s in subs_data
+                            if float(s.get('start', 0)) <= current_time < float(s.get('end', 1))
+                        ]
                         if not active_subs:
-                            future_starts = [float(s.get('start', 0)) for s in subs_data if float(s.get('start', 0)) > current_time]
-                            if future_starts:
-                                next_start = min(future_starts)
-                                gap = next_start - current_time
-                                write_subtitle_frame(blank_path, gap)
-                                current_time = next_start
-                            else:
-                                gap = total_dur - current_time
-                                if gap > 0:
-                                    write_subtitle_frame(blank_path, gap)
-                                current_time = total_dur
+                            write_subtitle_frame(blank_path, frame_duration)
+                            self.update_progress_safe(int(((current_time + frame_duration) / total_dur) * 50))
                             continue
 
                         html_subs = ""
@@ -774,10 +784,9 @@ class DeliverView(QWidget):
                         page.set_content(html_content)
                         frame_path = os.path.join(self.temp_dir, f"f_{frame_idx}.png").replace("\\", "/")
                         page.screenshot(path=frame_path, omit_background=True, scale="css")
-                        write_subtitle_frame(frame_path, frame_step)
-                        current_time += frame_step
+                        write_subtitle_frame(frame_path, frame_duration)
                         frame_idx += 1
-                        self.update_progress_safe(int((current_time / total_dur) * 50))
+                        self.update_progress_safe(int(((current_time + frame_duration) / total_dur) * 50))
 
                     f_concat.write(f"file '{last_concat_file}'\n")
 
