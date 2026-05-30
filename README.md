@@ -107,9 +107,10 @@ The workflow builds:
 - `SubtitleComposer-<tag>-macos-x64.zip`
 - `SubtitleComposer-<tag>-macos-arm64.zip`
 
-Each package includes the open font pack. The workflow also generates
+Each package includes the open font pack and a bundled FFmpeg/FFprobe runtime
+prepared by the GitHub-hosted runner. The workflow also generates
 `checksums.sha256`, uploads the files to GitHub Releases, and creates GitHub
-artifact attestations with `actions/attest`.
+artifact attestations with `actions/attest-build-provenance`.
 
 The macOS `.app` bundles are ad-hoc signed in CI. They are not Apple Developer
 ID notarized unless you add Apple signing and notarization secrets later.

@@ -58,7 +58,7 @@
 | 资产 | 数量 | 协议 | 来源 | 结论 |
 | --- | ---: | --- | --- | --- |
 | Open font pack | 21 个字体文件 | OFL-1.1 或兼容开放字体许可证 | `fonts/open/open_fonts_manifest.json` | 可随 GPL-3.0-only 项目发布；保留字体许可证文件 |
-| FFmpeg | 按需下载，不在当前 workflow 中主动捆绑 | GPL/LGPL 取决于构建变体 | `core.py` 中 BtbN GPL build URL | 若未来打包进 release，需补齐 notices/source-offer |
+| FFmpeg | Release workflow bundles FFmpeg/FFprobe under `vendor/<platform>/ffmpeg` | GPL/LGPL depends on build variant; Windows Gyan essentials builds are GPLv3 | https://www.gyan.dev/ffmpeg/builds/ and https://ffmpeg.org/legal.html | Preserve upstream notices and source-offer information with release materials |
 | PyInstaller | 构建工具 | GPL-2.0-or-later with bootloader exception | https://pyinstaller.org/en/stable/license.html | 可用于构建；保留 provenance |
 | Playwright browsers | release build 安装 Chromium | Chromium/browser 组件许可证 | https://playwright.dev/python/ | 若被打进产物，持续跟踪 notices |
 
@@ -84,7 +84,7 @@
 
 | 组件 | 风险 | 建议 |
 | --- | --- | --- |
-| FFmpeg BtbN GPL build | `core.py` 指向 `ffmpeg-master-latest-win64-gpl.zip`；若随安装包捆绑，需遵守 FFmpeg/GPL notices 与源码提供义务 | 当前 release workflow 不主动捆绑 FFmpeg；若未来捆绑，先补齐 notices/source-offer |
+| FFmpeg release runtime | Release workflow bundles Windows FFmpeg from Gyan essentials and macOS FFmpeg from the GitHub-hosted Homebrew environment | Preserve upstream notices and source-offer information; keep the project GPL-3.0-only baseline |
 | 字体包 | OFL 字体可以随软件发布，但修改字体后不得违规使用 Reserved Font Name | 保留每个字体目录内的许可证文件；修改字体时重命名并更新 manifest |
 | settings.json | 本地配置可能包含 token、API key、云同步地址和本地路径 | 不提交 `settings.json`；使用 `settings.example.json` 模板 |
 
@@ -110,5 +110,5 @@
 1. 推送 GitHub 前确认项目是否接受 `GPL-3.0-only` 开源分发。
 2. 如果计划闭源或使用 MIT/Apache-2.0，请先取得并记录 Riverbank PyQt/PyQt-WebEngine 商业授权。
 3. 发布二进制时随包附带 `LICENSE`、`COPYING`、`LICENSE.LIST`、`THIRD_PARTY_NOTICES.md`、本报告、字体许可证文件和 release checksum。
-4. 若未来把 FFmpeg 或 Playwright 浏览器二进制打进安装包，新增第三方 notices 与源码/许可证说明。
+4. FFmpeg release runtime files are bundled by CI; keep third-party notices and source/source-offer information in release materials.
 5. 每次依赖或字体资产变更后重新执行本审计。

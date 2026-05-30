@@ -30,7 +30,7 @@ ffprobe.exe
 
 # Keep checked-in web runtime builds, but ignore transient Node modules.
 web_tools/node_modules/
-web_tools/.npm-cache/
+web_tools/.npm-cache*/
 web_tools/.vite/
 web_tools/*.log
 

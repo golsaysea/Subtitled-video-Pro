@@ -5,23 +5,16 @@ on:
     tags:
       - "v*"
       - "V*"
-  workflow_dispatch:
-    inputs:
-      version:
-        description: "Release tag, for example V0.1.12"
-        required: true
-        type: string
 
 permissions:
   contents: write
   id-token: write
   attestations: write
-  artifact-metadata: write
 
 env:
   APP_NAME: SubtitleComposer
   PYTHON_VERSION: "3.12"
-  NODE_VERSION: "24"
+  NODE_VERSION: "20"
 
 jobs:
   build-windows:
@@ -34,21 +27,17 @@ jobs:
     steps:
       - name: Resolve release tag
         run: |
-          $tag = "${{ github.ref_name }}"
-          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            $tag = "${{ inputs.version }}"
-          }
-          $tag = $tag.Trim()
+          $tag = "${{ github.ref_name }}".Trim()
           if (-not ($tag -match '^[vV][0-9]+\.[0-9]+\.[0-9]+$')) {
             throw "Release tag must look like v0.1.0 or V0.1.0. Received: $tag"
           }
           "RELEASE_TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -56,14 +45,14 @@ jobs:
             requirements.txt
             requirements-build.txt
 
-      - name: Set up Node
-        uses: actions/setup-node@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Install web dependencies
         working-directory: web_tools
-        run: npm ci --no-audit --no-fund --cache "$env:RUNNER_TEMP\npm-cache"
+        run: npm ci --legacy-peer-deps --no-audit --no-fund --cache "$env:RUNNER_TEMP\npm-cache"
 
       - name: Build web tools
         working-directory: web_tools
@@ -102,6 +91,22 @@ jobs:
           $env:PLAYWRIGHT_BROWSERS_PATH = "0"
           python -m playwright install chromium
 
+      - name: Download ffmpeg (Windows)
+        run: |
+          $ffmpegUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+          $zipFile = Join-Path $env:RUNNER_TEMP "ffmpeg.zip"
+          $extractDir = Join-Path $env:RUNNER_TEMP "ffmpeg-extract"
+          Invoke-WebRequest -Uri $ffmpegUrl -OutFile $zipFile -UseBasicParsing
+          Expand-Archive -Path $zipFile -DestinationPath $extractDir -Force
+          $ffmpegDir = Get-ChildItem -Path $extractDir -Directory | Select-Object -First 1
+          New-Item -ItemType Directory -Force -Path "vendor\windows\ffmpeg\bin" | Out-Null
+          Copy-Item "$($ffmpegDir.FullName)\bin\ffmpeg.exe" "vendor\windows\ffmpeg\bin\" -Force
+          Copy-Item "$($ffmpegDir.FullName)\bin\ffprobe.exe" "vendor\windows\ffmpeg\bin\" -Force
+          Copy-Item "$($ffmpegDir.FullName)\bin\ffplay.exe" "vendor\windows\ffmpeg\bin\" -Force
+          Copy-Item "$($ffmpegDir.FullName)\LICENSE" "vendor\windows\ffmpeg\" -ErrorAction SilentlyContinue -Force
+          Copy-Item "$($ffmpegDir.FullName)\README.txt" "vendor\windows\ffmpeg\" -ErrorAction SilentlyContinue -Force
+          Get-ChildItem "vendor\windows\ffmpeg\bin"
+
       - name: Build Windows app
         run: |
           $env:PLAYWRIGHT_BROWSERS_PATH = "0"
@@ -118,6 +123,7 @@ jobs:
             "--add-data", "font_registry.json;.",
             "--add-data", "nlp_dictionary.txt;.",
             "--add-data", "fonts/open;fonts/open",
+            "--add-data", "vendor/windows/ffmpeg;vendor/windows/ffmpeg",
             "--add-data", "web_tools/dist;web_tools/dist",
             "--collect-all", "PyQt6",
             "--collect-all", "playwright",
@@ -167,17 +173,17 @@ jobs:
           $hash = (Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  $artifactName" | Set-Content -LiteralPath (Join-Path $releaseDir "checksums-windows-x64.sha256") -Encoding ascii
 
-      - name: Generate Windows artifact attestation
-        uses: actions/attest@v4
+      - name: Attest Windows build provenance
+        uses: actions/attest-build-provenance@v2
         with:
           subject-path: |
             release/*.zip
             release/checksums-windows-x64.sha256
 
-      - name: Upload Windows workflow artifact
-        uses: actions/upload-artifact@v7
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
         with:
-          name: windows-x64-release
+          name: release-windows-x64
           path: release/*
           if-no-files-found: error
 
@@ -199,11 +205,7 @@ jobs:
     steps:
       - name: Resolve release tag
         run: |
-          tag="${GITHUB_REF_NAME}"
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            tag="${{ inputs.version }}"
-          fi
-          tag="$(printf '%s' "$tag" | xargs)"
+          tag="$(printf '%s' "$GITHUB_REF_NAME" | xargs)"
           if [[ ! "$tag" =~ ^[vV][0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Release tag must look like v0.1.0 or V0.1.0. Received: $tag" >&2
             exit 1
@@ -211,10 +213,10 @@ jobs:
           echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -222,14 +224,14 @@ jobs:
             requirements.txt
             requirements-build.txt
 
-      - name: Set up Node
-        uses: actions/setup-node@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Install web dependencies
         working-directory: web_tools
-        run: npm ci --no-audit --no-fund --cache "$RUNNER_TEMP/npm-cache"
+        run: npm ci --legacy-peer-deps --no-audit --no-fund --cache "$RUNNER_TEMP/npm-cache"
 
       - name: Build web tools
         working-directory: web_tools
@@ -270,6 +272,15 @@ jobs:
           export PLAYWRIGHT_BROWSERS_PATH=0
           python -m playwright install chromium
 
+      - name: Download ffmpeg (macOS)
+        run: |
+          mkdir -p vendor/darwin/ffmpeg/bin
+          brew install ffmpeg
+          cp "$(which ffmpeg)" vendor/darwin/ffmpeg/bin/ffmpeg
+          cp "$(which ffprobe)" vendor/darwin/ffmpeg/bin/ffprobe
+          chmod +x vendor/darwin/ffmpeg/bin/*
+          brew info ffmpeg > vendor/darwin/ffmpeg/HOMEBREW-INFO.txt
+
       - name: Create macOS app icon
         run: |
           mkdir -p build/app.iconset
@@ -296,6 +307,7 @@ jobs:
             --add-data "font_registry.json:." \
             --add-data "nlp_dictionary.txt:." \
             --add-data "fonts/open:fonts/open" \
+            --add-data "vendor/darwin/ffmpeg:vendor/darwin/ffmpeg" \
             --add-data "web_tools/dist:web_tools/dist" \
             --collect-all PyQt6 \
             --collect-all playwright \
@@ -346,108 +358,51 @@ jobs:
           hash="$(shasum -a 256 "$artifact_path" | awk '{print $1}')"
           printf "%s  %s\n" "$hash" "$artifact_name" > "$release_dir/checksums-macos-${{ matrix.arch }}.sha256"
 
-      - name: Generate macOS artifact attestation
-        uses: actions/attest@v4
+      - name: Attest macOS build provenance
+        uses: actions/attest-build-provenance@v2
         with:
           subject-path: |
             release/*.zip
             release/checksums-macos-${{ matrix.arch }}.sha256
 
-      - name: Upload macOS workflow artifact
-        uses: actions/upload-artifact@v7
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
         with:
-          name: macos-${{ matrix.arch }}-release
+          name: release-macos-${{ matrix.arch }}
           path: release/*
           if-no-files-found: error
 
-  publish-release:
-    name: Publish GitHub release
-    runs-on: ubuntu-latest
+  release:
+    name: Create GitHub release
     needs:
       - build-windows
       - build-macos
-    defaults:
-      run:
-        shell: bash
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
 
     steps:
-      - name: Resolve release tag
-        run: |
-          tag="${GITHUB_REF_NAME}"
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            tag="${{ inputs.version }}"
-          fi
-          tag="$(printf '%s' "$tag" | xargs)"
-          if [[ ! "$tag" =~ ^[vV][0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Release tag must look like v0.1.0 or V0.1.0. Received: $tag" >&2
-            exit 1
-          fi
-          echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
-
-      - name: Download release artifacts
-        uses: actions/download-artifact@v7
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
         with:
           path: release
           merge-multiple: true
 
-      - name: Create combined checksum and notes
+      - name: Create combined checksums
         run: |
           cd release
           sha256sum *.zip > checksums.sha256
-          cat > RELEASE_NOTES.md <<EOF
-          # Subtitle Composer ${RELEASE_TAG}
+          cat checksums.sha256
 
-          Platform builds generated by GitHub Actions:
-          - Windows x64
-          - macOS x64
-          - macOS arm64
-
-          Included release evidence:
-          - checksums.sha256
-          - per-platform checksum files
-          - GitHub artifact attestations generated by actions/attest
-          - LICENSE.LIST
-          - THIRD_PARTY_NOTICES.md
-          - docs/DEPENDENCY_LICENSE_AUDIT.md
-          - docs/SECURITY_ATTESTATION.md
-
-          Bundled release assets:
-          - open font pack under fonts/open
-          - font registry font_registry.json
-          - NLP dictionary nlp_dictionary.txt
-
-          License baseline: GPL-3.0-only, unless a commercial PyQt/PyQt-WebEngine license is documented.
-          EOF
-
-      - name: Generate combined release attestation
-        uses: actions/attest@v4
+      - name: Attest release manifest provenance
+        uses: actions/attest-build-provenance@v2
         with:
-          subject-path: |
-            release/*.zip
-            release/checksums.sha256
+          subject-path: release/checksums.sha256
 
-      - name: Upload combined workflow artifact
-        uses: actions/upload-artifact@v7
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: all-platforms-release
-          path: release/*
-          if-no-files-found: error
-
-      - name: Publish GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          files=()
-          while IFS= read -r -d '' file; do
-            if [ "$(basename "$file")" != "RELEASE_NOTES.md" ]; then
-              files+=("$file")
-            fi
-          done < <(find release -maxdepth 1 -type f -print0)
-
-          if gh release view "$RELEASE_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "${files[@]}" --clobber --repo "$GH_REPO"
-            gh release edit "$RELEASE_TAG" --notes-file "release/RELEASE_NOTES.md" --repo "$GH_REPO"
-          else
-            gh release create "$RELEASE_TAG" "${files[@]}" --target "$GITHUB_SHA" --title "Subtitle Composer $RELEASE_TAG" --notes-file "release/RELEASE_NOTES.md" --repo "$GH_REPO"
-          fi
+          files: release/**/*
+          generate_release_notes: true

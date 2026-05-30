@@ -27,28 +27,47 @@ def get_app_dir():
     else:
         return os.path.dirname(os.path.abspath(__file__))
 
+def get_resource_dir():
+    if hasattr(sys, '_MEIPASS'):
+        return sys._MEIPASS
+    if getattr(sys, 'frozen', False) and sys.platform == "darwin":
+        return os.path.abspath(os.path.join(os.path.dirname(sys.executable), "..", "Resources"))
+    return get_app_dir()
+
+def get_platform_vendor_name():
+    if os.name == 'nt':
+        return "windows"
+    if sys.platform == "darwin":
+        return "darwin"
+    return "linux"
+
+def find_bundled_ffmpeg_tool(exe_name):
+    platform_name = get_platform_vendor_name()
+    candidates = []
+    for base_dir in dict.fromkeys([get_app_dir(), get_resource_dir()]):
+        candidates.extend([
+            os.path.join(base_dir, exe_name),
+            os.path.join(base_dir, "vendor", platform_name, "ffmpeg", "bin", exe_name),
+        ])
+    for path in candidates:
+        if path and os.path.exists(path):
+            return path
+    return ""
+
 def get_ffmpeg_cmd():
     exe_name = "ffmpeg.exe" if os.name == 'nt' else "ffmpeg"
-    local_ffmpeg = os.path.join(get_app_dir(), exe_name)
-    if os.path.exists(local_ffmpeg): 
-        return local_ffmpeg
-    if hasattr(sys, '_MEIPASS'):
-        meipass_ffmpeg = os.path.join(sys._MEIPASS, exe_name)
-        if os.path.exists(meipass_ffmpeg): 
-            return meipass_ffmpeg
+    bundled = find_bundled_ffmpeg_tool(exe_name)
+    if bundled:
+        return bundled
     if shutil.which(exe_name): 
         return exe_name
     return exe_name
 
 def get_ffprobe_cmd():
     exe_name = "ffprobe.exe" if os.name == 'nt' else "ffprobe"
-    local_ffprobe = os.path.join(get_app_dir(), exe_name)
-    if os.path.exists(local_ffprobe):
-        return local_ffprobe
-    if hasattr(sys, '_MEIPASS'):
-        meipass_ffprobe = os.path.join(sys._MEIPASS, exe_name)
-        if os.path.exists(meipass_ffprobe):
-            return meipass_ffprobe
+    bundled = find_bundled_ffmpeg_tool(exe_name)
+    if bundled:
+        return bundled
     if shutil.which(exe_name):
         return exe_name
     return exe_name

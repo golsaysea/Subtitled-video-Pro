@@ -54,11 +54,11 @@ The `Release` workflow will:
 5. build Windows x64 with PyInstaller on `windows-latest`;
 6. build macOS x64 on `macos-15-intel`;
 7. build macOS arm64 on `macos-15`;
-8. bundle `fonts/open`, `font_registry.json`, `nlp_dictionary.txt`, and notices;
+8. bundle `fonts/open`, FFmpeg/FFprobe runtime files, `font_registry.json`, `nlp_dictionary.txt`, and notices;
 9. apply ad-hoc signing to the macOS `.app` bundles;
 10. create per-platform checksum files and a combined `checksums.sha256`;
-11. create GitHub artifact attestations;
-12. publish or update the GitHub release.
+11. create GitHub artifact attestations with `actions/attest-build-provenance`;
+12. publish the GitHub release with GitHub-generated notes.
 
 The macOS packages are ad-hoc signed, not Apple Developer ID notarized. If you
 want a Gatekeeper-friendly public macOS release, add Apple signing certificate

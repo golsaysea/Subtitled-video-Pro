@@ -22,7 +22,7 @@ components. See `LICENSE.LIST` for the direct dependency audit and
 | --- | --- | --- | --- |
 | Open font pack | OFL-1.1 or compatible open font licenses | `fonts/open/open_fonts_manifest.json` | 21 bundled font files; keep each font directory's `OFL.txt`, `LICENSE.txt`, or `LICENSE.md` with redistributed artifacts |
 | PyInstaller | GPL-2.0-or-later with bootloader exception; selected files Apache-2.0 | https://pyinstaller.org/en/stable/license.html | Used to produce Windows release artifacts |
-| FFmpeg BtbN GPL build | GPL/LGPL FFmpeg components depending on build variant | https://github.com/BtbN/FFmpeg-Builds | App can download FFmpeg on demand; do not bundle silently without notices/source-offer handling |
+| FFmpeg release runtime | GPL/LGPL FFmpeg components depending on build variant; Windows Gyan essentials builds are GPLv3 | https://www.gyan.dev/ffmpeg/builds/ and https://ffmpeg.org/legal.html | Release workflow bundles FFmpeg/FFprobe under `vendor/<platform>/ffmpeg` and preserves upstream notice files where provided |
 | Playwright Chromium browser | Chromium and bundled component licenses | https://playwright.dev/python/ | The release build installs Chromium for Playwright; keep browser notices under review if bundled into the final artifact |
 
 ## Bundled Open Font Pack

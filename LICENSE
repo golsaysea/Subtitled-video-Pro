@@ -34,11 +34,11 @@ documents a valid Riverbank commercial license for PyQt/PyQt-WebEngine.
 - Keep `GPL-3.0-only` project license notice visible in the repository and
   release package.
 - Preserve third-party license notices for PyQt6, PyQt6-WebEngine, requests,
-  playwright, konva, bundled fonts, and any packaged browser/runtime data.
+  playwright, konva, bundled fonts, bundled FFmpeg runtime files, and any packaged browser/runtime data.
 - Keep OFL license files alongside redistributed font files under `fonts/open`.
 - If FFmpeg GPL binaries are bundled, include FFmpeg notices and source-offer
-  information; if the app only downloads FFmpeg on demand, document that the
-  user obtains FFmpeg from the upstream provider.
+  information. The release workflow copies upstream FFmpeg notice files where
+  provided and the repository remains GPL-3.0-only compatible.
 - Do not impose additional downstream restrictions that conflict with GPL-3.0.
 
 ## Dependency License Summary
@@ -63,6 +63,7 @@ Bundled asset note: `fonts/open/open_fonts_manifest.json` records 21 bundled fon
 | playwright | Apache-2.0 | Compatible | Preserve Apache-2.0 license and notices; track bundled browser assets separately |
 | konva | MIT | Compatible | Preserve MIT license and notices |
 | Open font pack | OFL-1.1 or compatible open font license | Compatible as bundled font assets | Preserve license files; respect reserved font name rules if modified |
+| FFmpeg runtime | GPL/LGPL depending on build variant | Compatible under GPL-3.0-only when GPL builds are bundled | Preserve upstream notices and source-offer information |
 
 ## Third-Party License Notices
 
@@ -91,8 +92,8 @@ Bundled asset note: `fonts/open/open_fonts_manifest.json` records 21 bundled fon
 1. PyQt6 and PyQt6-WebEngine are the decisive licensing factors. A permissive
    project license should not be used for public distribution unless commercial
    PyQt licensing is documented.
-2. FFmpeg is currently fetched from a GPL build URL in `core.py`; avoid bundling
-   that binary without notices and source-offer handling.
+2. Release builds bundle FFmpeg/FFprobe runtime files. Keep upstream notices and
+   source-offer information with release materials.
 3. Bundled fonts are open-font assets, but their license files must stay with the
    redistributed package.
 4. Re-run this audit whenever `requirements.txt`, `web_tools/package.json`,
