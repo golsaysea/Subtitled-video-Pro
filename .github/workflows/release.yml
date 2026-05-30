@@ -60,12 +60,10 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: web_tools/package-lock.json
 
       - name: Install web dependencies
         working-directory: web_tools
-        run: npm ci
+        run: npm ci --no-audit --no-fund --cache "$env:RUNNER_TEMP\npm-cache"
 
       - name: Build web tools
         working-directory: web_tools
@@ -228,12 +226,10 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: web_tools/package-lock.json
 
       - name: Install web dependencies
         working-directory: web_tools
-        run: npm ci
+        run: npm ci --no-audit --no-fund --cache "$RUNNER_TEMP/npm-cache"
 
       - name: Build web tools
         working-directory: web_tools
