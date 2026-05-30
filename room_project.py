@@ -6,6 +6,7 @@ import shutil
 import zipfile
 import html
 import re
+from datetime import datetime
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTreeWidget, QTreeWidgetItem,
@@ -45,6 +46,7 @@ from project_audit import format_scan_report, scan_folder, scan_to_json, scan_wo
 PROJECT_HALL_THEME_KEY = "project_hall_theme"
 REEL_DRAG_MIME = "application/x-subtitle-composer-reel"
 REEL_GROUP_MARKER = ".subtitle_reel_group"
+TRASH_DIR_NAME = ".subtitle_trash"
 PROJECT_HALL_THEMES = {
     "dark_star": {
         "name": "暗色星空",
@@ -627,6 +629,7 @@ class CloudShareDialog(QDialog):
 
 class ReelCard(QFrame):
     clicked = pyqtSignal(str) 
+    selection_clicked = pyqtSignal(str, object)
     delete_clicked = pyqtSignal(str)
     rename_clicked = pyqtSignal(str)
     duplicate_clicked = pyqtSignal(str)
@@ -637,14 +640,13 @@ class ReelCard(QFrame):
         self.scomp_path = project_data.get("project_path", "")
         self._drag_start_pos = None
         self._drag_started = False
+        self._selected = False
+        self._theme_colors = None
         self.init_ui()
 
     def init_ui(self):
         self.setFixedSize(200, 280)
-        self.setStyleSheet("""
-            QFrame { background-color: #1e1e2e; border: 1px solid #313244; border-radius: 12px; }
-            QFrame:hover { border: 2px solid #89b4fa; background-color: #313244; }
-        """)
+        self._apply_card_frame_style()
         shadow = QGraphicsDropShadowEffect(); shadow.setBlurRadius(15); shadow.setColor(Qt.GlobalColor.black); shadow.setOffset(0, 5)
         self.setGraphicsEffect(shadow)
         self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
@@ -709,10 +711,31 @@ class ReelCard(QFrame):
         layout.addWidget(info_frame)
 
     def apply_theme(self, colors):
+        self._theme_colors = colors
+        self._apply_card_frame_style()
+        self.lbl_cover.setStyleSheet(
+            f"background-color: {colors['input']}; color: {colors['muted']}; font-size: 16px; "
+            "font-weight: bold; border-top-left-radius: 12px; border-top-right-radius: 12px; border-bottom: none;"
+        )
+        self.lbl_title.setStyleSheet(f"font-size: 14px; font-weight: 800; color: {colors['text']};")
+        self.lbl_date.setStyleSheet(f"font-size: 12px; color: {colors['muted']};")
+
+    def _apply_card_frame_style(self):
+        colors = self._theme_colors or {
+            "card": "#1e1e2e",
+            "card_hover": "#313244",
+            "border": "#313244",
+            "accent": "#89b4fa",
+            "selected": "#89b4fa",
+            "selected_text": "#11111b",
+        }
+        bg = colors.get("selected", colors["accent"]) if self._selected else colors["card"]
+        border = colors.get("accent", "#89b4fa") if self._selected else colors["border"]
+        border_w = 3 if self._selected else 1
         self.setStyleSheet(f"""
             QFrame {{
-                background-color: {colors['card']};
-                border: 1px solid {colors['border']};
+                background-color: {bg};
+                border: {border_w}px solid {border};
                 border-radius: 12px;
             }}
             QFrame:hover {{
@@ -720,12 +743,10 @@ class ReelCard(QFrame):
                 background-color: {colors['card_hover']};
             }}
         """)
-        self.lbl_cover.setStyleSheet(
-            f"background-color: {colors['input']}; color: {colors['muted']}; font-size: 16px; "
-            "font-weight: bold; border-top-left-radius: 12px; border-top-right-radius: 12px; border-bottom: none;"
-        )
-        self.lbl_title.setStyleSheet(f"font-size: 14px; font-weight: 800; color: {colors['text']};")
-        self.lbl_date.setStyleSheet(f"font-size: 12px; color: {colors['muted']};")
+
+    def set_selected(self, selected):
+        self._selected = bool(selected)
+        self._apply_card_frame_style()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -751,7 +772,11 @@ class ReelCard(QFrame):
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton and not self._drag_started:
-            self.clicked.emit(self.scomp_path)
+            modifiers = event.modifiers()
+            if modifiers & (Qt.KeyboardModifier.ShiftModifier | Qt.KeyboardModifier.ControlModifier):
+                self.selection_clicked.emit(self.scomp_path, modifiers)
+            else:
+                self.clicked.emit(self.scomp_path)
         self._drag_start_pos = None
         self._drag_started = False
         super().mouseReleaseEvent(event)
@@ -899,6 +924,10 @@ class ProjectView(QWidget):
         self.reel_filter = ""
         self.project_theme = self.load_project_hall_theme()
         self._refreshing_folder_list = False
+        self.selected_reel_paths = set()
+        self._last_selected_reel_path = ""
+        self._visible_reel_paths = []
+        self._reel_cards = {}
         self.setAcceptDrops(True)
         self.init_ui()
         self.refresh_workspace_controls()
@@ -1081,15 +1110,24 @@ class ProjectView(QWidget):
         self.btn_audit_folder = QPushButton("体检当前项目")
         self.btn_audit_workspace = QPushButton("体检全部")
         self.btn_safe_fonts = QPushButton("字体安全化")
-        for btn in (self.btn_audit_folder, self.btn_audit_workspace, self.btn_safe_fonts):
+        self.btn_move_selected = QPushButton("移动选中")
+        self.btn_trash_selected = QPushButton("删除选中")
+        self.btn_open_trash = QPushButton("垃圾桶")
+        for btn in (self.btn_audit_folder, self.btn_audit_workspace, self.btn_safe_fonts, self.btn_move_selected, self.btn_trash_selected, self.btn_open_trash):
             btn.setStyleSheet("background-color: #313244; color: #cdd6f4; border: none; border-radius: 8px; padding: 8px 12px; font-weight: bold;")
         self.btn_audit_folder.clicked.connect(self.show_current_folder_audit)
         self.btn_audit_workspace.clicked.connect(self.show_workspace_audit)
         self.btn_safe_fonts.clicked.connect(self.safe_fontize_current_folder)
+        self.btn_move_selected.clicked.connect(self.move_selected_reels_dialog)
+        self.btn_trash_selected.clicked.connect(self.delete_selected_reels)
+        self.btn_open_trash.clicked.connect(self.open_trash_folder)
         tools_row.addWidget(self.reel_search, stretch=1)
         tools_row.addWidget(self.btn_audit_folder)
         tools_row.addWidget(self.btn_audit_workspace)
         tools_row.addWidget(self.btn_safe_fonts)
+        tools_row.addWidget(self.btn_move_selected)
+        tools_row.addWidget(self.btn_trash_selected)
+        tools_row.addWidget(self.btn_open_trash)
         right_layout.addLayout(tools_row)
 
         self.lbl_reel_summary = QLabel("")
@@ -1255,6 +1293,9 @@ class ProjectView(QWidget):
             getattr(self, "btn_audit_folder", None),
             getattr(self, "btn_audit_workspace", None),
             getattr(self, "btn_safe_fonts", None),
+            getattr(self, "btn_move_selected", None),
+            getattr(self, "btn_trash_selected", None),
+            getattr(self, "btn_open_trash", None),
         ):
             if btn:
                 btn.setStyleSheet(self._pill_button_style())
@@ -2150,12 +2191,12 @@ class ProjectView(QWidget):
     def delete_current_folder(self):
         if not self.current_folder: return
         folder_name = os.path.basename(self.current_folder)
-        reply = QMessageBox.warning(self, '⚠️ 警告', f'确认彻底删除项目【{folder_name}】及其所有内容吗？\n此操作不可逆！', QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        reply = QMessageBox.warning(self, '移动到垃圾桶', f'确认把项目【{folder_name}】及其所有内容移动到垃圾桶吗？', QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
             try:
                 if self.active_lock_project_path and os.path.abspath(self.active_lock_project_path).startswith(os.path.abspath(self.current_folder) + os.sep):
                     self.release_active_cloud_lock()
-                shutil.rmtree(self.current_folder)
+                self._move_path_to_trash(self.current_folder)
                 
                 # 如果正在加载的 Reel 被删了，清理大盘数据
                 if self.project_data and self.project_data.get("project_dir", "") == self.current_folder:
@@ -2175,6 +2216,8 @@ class ProjectView(QWidget):
         rel_path = self._folder_rel_from_item(item)
         self.current_folder = os.path.join(self.workspace, rel_path)
         self.current_reel_dir = self.current_folder
+        self.selected_reel_paths.clear()
+        self._last_selected_reel_path = ""
         self.update_reel_folder_title()
         self.refresh_workspace_summary()
         self.refresh_reels_grid()
@@ -2271,15 +2314,15 @@ class ProjectView(QWidget):
         reel_count = len(get_reels_in_folder(folder_path, recursive=True))
         reply = QMessageBox.warning(
             self,
-            "删除分组",
-            f"确认删除分组【{name}】吗？\n其中包含 {reel_count} 个 Reel，此操作不可逆。",
+            "移动到垃圾桶",
+            f"确认把分组【{name}】移动到垃圾桶吗？\n其中包含 {reel_count} 个 Reel。",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
         try:
-            shutil.rmtree(folder_path)
+            self._move_path_to_trash(folder_path)
             if os.path.normcase(os.path.abspath(self.current_reel_dir)) == os.path.normcase(os.path.abspath(folder_path)):
                 self.current_reel_dir = self.current_folder
             self.update_reel_folder_title()
@@ -2287,6 +2330,138 @@ class ProjectView(QWidget):
             self.refresh_reels_grid()
         except Exception as e:
             QMessageBox.critical(self, "删除分组失败", str(e))
+
+    def trash_root(self):
+        root = os.path.join(self.workspace, TRASH_DIR_NAME)
+        os.makedirs(root, exist_ok=True)
+        return root
+
+    def _trash_bucket_dir(self, label):
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe = re.sub(r'[\\/:*?"<>|]+', "_", str(label or "item")).strip(" ._") or "item"
+        base = os.path.join(self.trash_root(), f"{stamp}_{safe}")
+        candidate = base
+        n = 2
+        while os.path.exists(candidate):
+            candidate = f"{base}_{n}"
+            n += 1
+        os.makedirs(candidate, exist_ok=True)
+        return candidate
+
+    def _move_path_to_trash(self, path):
+        if not path or not os.path.exists(path):
+            return ""
+        bucket = self._trash_bucket_dir(os.path.basename(path))
+        dest = os.path.join(bucket, os.path.basename(path))
+        shutil.move(path, dest)
+        return dest
+
+    def _trash_reel_file(self, path):
+        if not path or not os.path.exists(path):
+            return ""
+        if self.active_lock_project_path and os.path.normcase(os.path.abspath(self.active_lock_project_path)) == os.path.normcase(os.path.abspath(path)):
+            self.release_active_cloud_lock()
+        bucket = self._trash_bucket_dir(os.path.splitext(os.path.basename(path))[0])
+        dest = os.path.join(bucket, os.path.basename(path))
+        cover_candidates = [path.replace(".scomp", "_cover.jpg")]
+        try:
+            data = load_project(path)
+            cover_rel = data.get("cover_img", "")
+            if cover_rel:
+                cover_candidates.append(os.path.join(os.path.dirname(path), cover_rel))
+        except Exception:
+            pass
+        shutil.move(path, dest)
+        moved_covers = set()
+        for cover_path in cover_candidates:
+            if cover_path and os.path.exists(cover_path) and cover_path not in moved_covers:
+                moved_covers.add(cover_path)
+                shutil.move(cover_path, os.path.join(bucket, os.path.basename(cover_path)))
+        return dest
+
+    def open_trash_folder(self):
+        QDesktopServices.openUrl(QUrl.fromLocalFile(self.trash_root()))
+
+    def _sync_reel_selection_ui(self):
+        visible = set(getattr(self, "_visible_reel_paths", []))
+        self.selected_reel_paths.intersection_update(visible)
+        for path, card in getattr(self, "_reel_cards", {}).items():
+            card.set_selected(path in self.selected_reel_paths)
+        count = len(self.selected_reel_paths)
+        if hasattr(self, "btn_move_selected"):
+            self.btn_move_selected.setEnabled(count > 0)
+        if hasattr(self, "btn_trash_selected"):
+            self.btn_trash_selected.setEnabled(count > 0)
+            self.btn_trash_selected.setText(f"删除选中({count})" if count else "删除选中")
+
+    def on_reel_selection_clicked(self, path, modifiers):
+        if not path:
+            return
+        if modifiers & Qt.KeyboardModifier.ShiftModifier and self._last_selected_reel_path in self._visible_reel_paths:
+            start = self._visible_reel_paths.index(self._last_selected_reel_path)
+            end = self._visible_reel_paths.index(path) if path in self._visible_reel_paths else start
+            if start > end:
+                start, end = end, start
+            self.selected_reel_paths.update(self._visible_reel_paths[start:end + 1])
+        elif modifiers & Qt.KeyboardModifier.ControlModifier:
+            if path in self.selected_reel_paths:
+                self.selected_reel_paths.remove(path)
+            else:
+                self.selected_reel_paths.add(path)
+            self._last_selected_reel_path = path
+        else:
+            self.selected_reel_paths = {path}
+            self._last_selected_reel_path = path
+        self._sync_reel_selection_ui()
+
+    def delete_selected_reels(self):
+        paths = [path for path in self._visible_reel_paths if path in self.selected_reel_paths and os.path.exists(path)]
+        if not paths:
+            return
+        reply = QMessageBox.warning(
+            self,
+            "移动到垃圾桶",
+            f"确认把 {len(paths)} 个 Reel 移动到垃圾桶吗？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            for path in paths:
+                self._trash_reel_file(path)
+                if self.project_data.get("project_path") == path:
+                    self.project_data = {}
+                    self.sync_current_project_label()
+                    self.sync_current_project_to_main()
+            self.selected_reel_paths.clear()
+            self.refresh_workspace_summary()
+            self.refresh_reels_grid()
+        except Exception as e:
+            QMessageBox.critical(self, "删除失败", str(e))
+
+    def move_selected_reels_dialog(self):
+        paths = [path for path in self._visible_reel_paths if path in self.selected_reel_paths and os.path.exists(path)]
+        if not paths:
+            return QMessageBox.information(self, "未选择", "按住 Ctrl 或 Shift 点击 Reel 后再移动。")
+        targets = []
+        if self.current_folder and os.path.isdir(self.current_folder):
+            targets.append((f"{os.path.basename(self.current_folder)} / 根目录", self.current_folder))
+            for folder_path in self.reel_group_dirs():
+                targets.append((f"{os.path.basename(self.current_folder)} / {os.path.basename(folder_path)}", folder_path))
+        if not targets:
+            return QMessageBox.warning(self, "没有目标", "请先选择一个工程文件夹。")
+        labels = [label for label, _ in targets]
+        choice, ok = QInputDialog.getItem(self, "移动选中 Reel", "移动到:", labels, 0, False)
+        if not ok:
+            return
+        target = dict(targets).get(choice)
+        if not target:
+            return
+        for path in paths:
+            self.move_reel_to_folder(path, target)
+        self.selected_reel_paths.clear()
+        self.refresh_reels_grid()
 
     def move_reel_to_folder(self, reel_path, target_folder):
         if not reel_path or not target_folder or not os.path.exists(reel_path) or not os.path.isdir(target_folder):
@@ -2334,6 +2509,8 @@ class ProjectView(QWidget):
                     clip["path"] = copy_internal_asset(clip.get("path", ""))
             if edit_state.get("audio_path"):
                 edit_state["audio_path"] = copy_internal_asset(edit_state.get("audio_path", ""))
+            if edit_state.get("music_path"):
+                edit_state["music_path"] = copy_internal_asset(edit_state.get("music_path", ""))
             project["project_path"] = target_path
             project["project_dir"] = target_folder
             project["project_name"] = target_name
@@ -2354,6 +2531,9 @@ class ProjectView(QWidget):
             if widget: widget.deleteLater()
 
         if not self.current_folder or not os.path.exists(self.current_folder): 
+            self._visible_reel_paths = []
+            self._reel_cards = {}
+            self._sync_reel_selection_ui()
             if hasattr(self, "lbl_reel_summary"):
                 self.lbl_reel_summary.setText("未选择项目文件夹")
             return
@@ -2378,6 +2558,8 @@ class ProjectView(QWidget):
             except Exception:
                 if not query or query in os.path.basename(path).lower():
                     reel_records.append((path, None))
+        self._visible_reel_paths = [path for path, _ in reel_records]
+        self._reel_cards = {}
         if hasattr(self, "lbl_reel_summary"):
             folder_name = os.path.basename(self.current_folder)
             view_name = "全部分组搜索" if query else (os.path.basename(self.current_reel_dir) if not root_view else "根目录")
@@ -2473,11 +2655,15 @@ class ProjectView(QWidget):
                 card = ReelCard(p_data)
                 card.apply_theme(c)
                 card.clicked.connect(self.load_and_enter_project)
+                card.selection_clicked.connect(self.on_reel_selection_clicked)
                 card.delete_clicked.connect(self.delete_reel)
                 card.rename_clicked.connect(self.rename_reel)
                 card.duplicate_clicked.connect(self.duplicate_reel)
+                self._reel_cards[path] = card
+                card.set_selected(path in self.selected_reel_paths)
                 add_grid_card(card)
             except Exception: pass
+        self._sync_reel_selection_ui()
 
     def create_new_reel(self):
         if not self.current_folder: return
@@ -2511,7 +2697,7 @@ class ProjectView(QWidget):
         if self.is_cloud_workspace() and not self.ensure_cloud_identity():
             return
         parent.room_batch.prepare_project_builder(target_dir, os.path.basename(target_dir))
-        parent.switch_room(3)
+        parent.switch_room(2)
 
     def load_and_enter_project(self, path):
         if not self.prepare_cloud_project_lock(path):
@@ -2534,14 +2720,12 @@ class ProjectView(QWidget):
             QMessageBox.critical(self, "载入失败", str(e))
 
     def delete_reel(self, path):
-        reply = QMessageBox.warning(self, '⚠️ 警告', '确认删除该 Reel 吗？', QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if path in self.selected_reel_paths and len(self.selected_reel_paths) > 1:
+            return self.delete_selected_reels()
+        reply = QMessageBox.warning(self, '移动到垃圾桶', '确认把该 Reel 移动到垃圾桶吗？', QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
             try:
-                if self.active_lock_project_path and os.path.normcase(os.path.abspath(self.active_lock_project_path)) == os.path.normcase(os.path.abspath(path)):
-                    self.release_active_cloud_lock()
-                os.remove(path)
-                cover_path = path.replace(".scomp", "_cover.jpg")
-                if os.path.exists(cover_path): os.remove(cover_path)
+                self._trash_reel_file(path)
                 self.refresh_workspace_summary()
                 self.refresh_reels_grid()
                 

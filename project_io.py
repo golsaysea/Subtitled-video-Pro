@@ -6,6 +6,7 @@ import copy
 import json
 from datetime import datetime
 import shutil
+from app_config import get_output_resolution
 
 PROJECT_VERSION = 4
 ASSETS_DIR = "assets"
@@ -64,6 +65,10 @@ def _resolve_project_media_paths(data):
     if edit_state.get("audio_path") or audio_rel:
         edit_state["audio_path"] = _resolve_media_path(project_dir, edit_state.get("audio_path", ""), audio_rel)
 
+    music_rel = edit_state.get("music_cloud_rel_path") or edit_state.get("music_asset_rel_path") or ""
+    if edit_state.get("music_path") or music_rel:
+        edit_state["music_path"] = _resolve_media_path(project_dir, edit_state.get("music_path", ""), music_rel)
+
     return data
 
 
@@ -90,8 +95,14 @@ def _backfill_edit_room_from_legacy_fields(merged, source):
         edit_state["audio_cloud_rel_path"] = media_files.get("audio_cloud_rel_path", "")
     if not edit_state.get("audio_asset_rel_path") and media_files.get("audio_asset_rel_path"):
         edit_state["audio_asset_rel_path"] = media_files.get("audio_asset_rel_path", "")
+    if not edit_state.get("music_path") and media_files.get("music_path"):
+        edit_state["music_path"] = media_files.get("music_path", "")
+    if not edit_state.get("music_cloud_rel_path") and media_files.get("music_cloud_rel_path"):
+        edit_state["music_cloud_rel_path"] = media_files.get("music_cloud_rel_path", "")
+    if not edit_state.get("music_asset_rel_path") and media_files.get("music_asset_rel_path"):
+        edit_state["music_asset_rel_path"] = media_files.get("music_asset_rel_path", "")
 
-    for key in ("duration", "resolution", "v_scale", "v_volume", "a_volume", "chunk_mode", "timing_mode", "fill_subtitle_gaps"):
+    for key in ("duration", "resolution", "v_scale", "v_volume", "a_volume", "music_volume", "chunk_mode", "timing_mode", "fill_subtitle_gaps"):
         if key in source and source.get(key) not in (None, ""):
             try:
                 current_duration = float(str(edit_state.get("duration", 0) or 0).replace(",", "."))
@@ -113,10 +124,15 @@ def _backfill_edit_room_from_legacy_fields(merged, source):
     merged_media = merged.setdefault("media_files", {})
     merged_media["video_clips"] = copy.deepcopy(edit_state.get("video_clips", []))
     merged_media["audio_path"] = edit_state.get("audio_path", "")
+    merged_media["music_path"] = edit_state.get("music_path", "")
     if edit_state.get("audio_cloud_rel_path"):
         merged_media["audio_cloud_rel_path"] = edit_state.get("audio_cloud_rel_path")
     if edit_state.get("audio_asset_rel_path"):
         merged_media["audio_asset_rel_path"] = edit_state.get("audio_asset_rel_path")
+    if edit_state.get("music_cloud_rel_path"):
+        merged_media["music_cloud_rel_path"] = edit_state.get("music_cloud_rel_path")
+    if edit_state.get("music_asset_rel_path"):
+        merged_media["music_asset_rel_path"] = edit_state.get("music_asset_rel_path")
     return merged
 
 
@@ -185,13 +201,27 @@ def sync_project_assets_to_project_dir(project_data):
         except FileNotFoundError:
             report["missing"].append(audio_path)
 
+    music_path = edit_state.get("music_path", "")
+    if music_path:
+        try:
+            new_path, copied, rel_path = copy_media_to_project_assets(project_data, music_path)
+            edit_state["music_path"] = new_path
+            if rel_path:
+                edit_state["music_cloud_rel_path"] = rel_path
+            report["copied" if copied else "already_local"].append(new_path)
+        except FileNotFoundError:
+            report["missing"].append(music_path)
+
     project_data["subs_data"] = copy.deepcopy(edit_state.get("subs_data", []))
     project_data["timeline"] = copy.deepcopy(edit_state.get("video_clips", []))
     media_files = project_data.setdefault("media_files", {})
     media_files["video_clips"] = copy.deepcopy(edit_state.get("video_clips", []))
     media_files["audio_path"] = edit_state.get("audio_path", "")
+    media_files["music_path"] = edit_state.get("music_path", "")
     if edit_state.get("audio_cloud_rel_path"):
         media_files["audio_cloud_rel_path"] = edit_state.get("audio_cloud_rel_path")
+    if edit_state.get("music_cloud_rel_path"):
+        media_files["music_cloud_rel_path"] = edit_state.get("music_cloud_rel_path")
 
     path = project_data.get("project_path")
     if path:
@@ -211,14 +241,15 @@ def _base_project_data(path, project_type, project_name):
         "media_files": {},
         "room_state": {
             "edit_room": {
-                "video_clips": [], "audio_path": "", "subs_data": [], 
-                "duration": 10.0, "resolution": "原画检测 (自动跟随)",
-                "v_scale": 100, "v_volume": 100, "a_volume": 100,
+                "video_clips": [], "audio_path": "", "music_path": "", "subs_data": [],
+                "duration": 10.0, "resolution": get_output_resolution(),
+                "v_scale": 100, "v_volume": 100, "a_volume": 100, "music_volume": 35,
                 "chunk_mode": "双行大段 (约10字，智能折行)",
                 "timing_mode": "J Cut (字幕稍后收尾)",
                 "fill_subtitle_gaps": True,
                 "default_pos_x": 0.0, "default_pos_y": 25.0, "default_style": {}
-            }
+            },
+            "design_room": {}
         },
         "subs_data": [],
         "timeline": []
@@ -365,6 +396,7 @@ def update_room_state(project_data, room_name, room_payload):
         media_files = project_data.setdefault("media_files", {})
         media_files["video_clips"] = copy.deepcopy(room_payload.get("video_clips", []))
         media_files["audio_path"] = room_payload.get("audio_path", "")
+        media_files["music_path"] = room_payload.get("music_path", "")
         if room_payload.get("cover_img"):
             project_data["cover_img"] = room_payload.get("cover_img")
 

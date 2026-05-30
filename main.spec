@@ -7,7 +7,6 @@ datas = [
     ("app_logo.png", "."),
     ("app_logo.ico", "."),
     ("icon.png", "."),
-    ("style_presets.json", "."),
     ("settings.example.json", "."),
     ("font_registry.json", "."),
     ("nlp_dictionary.txt", "."),

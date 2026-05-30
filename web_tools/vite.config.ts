@@ -13,6 +13,7 @@ export default defineConfig({
     emptyOutDir: false,
     rollupOptions: {
       input: {
+        design_editor: resolve(rootDir, "src/design_editor/index.html"),
         elevenlabs: resolve(rootDir, "src/elevenlabs/index.html"),
         elevenlabs_assist: resolve(rootDir, "src/elevenlabs_assist/index.html")
       }

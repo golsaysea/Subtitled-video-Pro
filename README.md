@@ -95,11 +95,11 @@ personal tokens are not staged.
 Create a release by pushing a tag:
 
 ```powershell
-git tag v0.1.0
-git push origin v0.1.0
+git tag V0.1.12
+git push origin V0.1.12
 ```
 
-You can also run the `Release` workflow manually and enter a tag like `v0.1.0`.
+You can also run the `Release` workflow manually and enter a tag like `V0.1.12`.
 
 The workflow builds:
 
@@ -117,19 +117,19 @@ ID notarized unless you add Apple signing and notarization secrets later.
 ## Verify Release Artifact
 
 ```powershell
-gh release download v0.1.0 -R <owner>/<repo>
-Get-FileHash .\SubtitleComposer-v0.1.0-windows-x64.zip -Algorithm SHA256
+gh release download V0.1.12 -R secure-artifacts/Subtitled-video-Pro
+Get-FileHash .\SubtitleComposer-V0.1.12-windows-x64.zip -Algorithm SHA256
 Get-Content .\checksums.sha256
-gh attestation verify .\SubtitleComposer-v0.1.0-windows-x64.zip -R <owner>/<repo>
+gh attestation verify .\SubtitleComposer-V0.1.12-windows-x64.zip -R secure-artifacts/Subtitled-video-Pro
 ```
 
 On macOS:
 
 ```bash
-gh release download v0.1.0 -R <owner>/<repo>
-shasum -a 256 SubtitleComposer-v0.1.0-macos-arm64.zip
+gh release download V0.1.12 -R secure-artifacts/Subtitled-video-Pro
+shasum -a 256 SubtitleComposer-V0.1.12-macos-arm64.zip
 cat checksums.sha256
-gh attestation verify SubtitleComposer-v0.1.0-macos-arm64.zip -R <owner>/<repo>
+gh attestation verify SubtitleComposer-V0.1.12-macos-arm64.zip -R secure-artifacts/Subtitled-video-Pro
 ```
 
 Compare the SHA256 result with `checksums.sha256`.

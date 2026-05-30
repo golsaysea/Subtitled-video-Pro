@@ -4,6 +4,7 @@
 import sys
 import os
 import threading
+import re
 
 os.environ["QTWEBENGINE_DISABLE_SANDBOX"] = "1"
 
@@ -29,18 +30,17 @@ os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = " ".join(chromium_flags)
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout,
     QHBoxLayout, QPushButton, QStackedWidget, QToolButton,
-    QMenu, QCheckBox, QLabel, QMessageBox
+    QMenu, QCheckBox, QLabel, QMessageBox, QTextEdit, QLineEdit, QAbstractSpinBox
 )
 from PyQt6.QtCore import Qt, QSettings
-from PyQt6.QtGui import QAction
+from PyQt6.QtGui import QAction, QKeySequence, QShortcut
 
 from core import auto_sync_cloud_data
 from font_assets import ensure_fonts_dir, register_bundled_fonts
-from project_io import load_or_create_default_project, update_room_state
+from project_io import load_or_create_default_project
 from workspace_config import get_active_workspace
 from room_project import PROJECT_HALL_THEMES, ProjectView
 from room_edit import EditView
-from room_scroll import ScrollView
 from room_batch import BatchView
 from room_deliver import DeliverView
 from room_settings import SettingsView
@@ -56,6 +56,7 @@ class SubtitledvideoPro(QMainWindow):
         self.project = project_data or {}
         self.rooms = []
         self.current_room_index = 0
+        self.current_workspace_key = "project"
         self.room_history = []
         self.room_history_pos = -1
         self.app_settings = QSettings("SubtitleComposer", "SubtitleVideoPro")
@@ -158,8 +159,10 @@ class SubtitledvideoPro(QMainWindow):
 
     def _action(self, text, callback, shortcut=None, checkable=False, checked=False):
         action = QAction(text, self)
-        if shortcut:
+        global_shortcuts = {"Ctrl+S", "Ctrl+Z", "Ctrl+Y", "Ctrl+Shift+Z"}
+        if shortcut and shortcut not in global_shortcuts:
             action.setShortcut(shortcut)
+            action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
         action.setCheckable(checkable)
         if checkable:
             action.setChecked(checked)
@@ -167,6 +170,58 @@ class SubtitledvideoPro(QMainWindow):
         else:
             action.triggered.connect(lambda checked=False: callback())
         return action
+
+    def create_global_shortcuts(self):
+        shortcuts = [
+            ("Ctrl+S", self.shortcut_save_current_stage),
+            ("Ctrl+Z", self.shortcut_undo_current_stage),
+            ("Ctrl+Y", self.shortcut_redo_current_stage),
+            ("Ctrl+Shift+Z", self.shortcut_redo_current_stage),
+        ]
+        self.global_shortcuts = []
+        for sequence, callback in shortcuts:
+            shortcut = QShortcut(QKeySequence(sequence), self)
+            shortcut.setContext(Qt.ShortcutContext.ApplicationShortcut)
+            shortcut.activated.connect(callback)
+            self.global_shortcuts.append(shortcut)
+
+    def _focus_is_text_editor(self):
+        focused = QApplication.focusWidget()
+        parent = focused.parent() if focused is not None else None
+        while parent is not None:
+            if isinstance(parent, QAbstractSpinBox):
+                return False
+            parent = parent.parent()
+        return isinstance(focused, (QTextEdit, QLineEdit))
+
+    def shortcut_save_current_stage(self):
+        if self.current_room_index == 1 and hasattr(self.room_edit, "save_to_project"):
+            self.project = self.room_edit.save_to_project(silent=True)
+            if hasattr(self.room_edit, "generate_cover_async"):
+                self.room_edit.generate_cover_async()
+            if hasattr(self.room_edit, "status_lbl"):
+                self.room_edit.status_lbl.setText("✅ 工程已保存")
+            self.refresh_room_links()
+            self.statusBar().showMessage("工程已保存", 2500)
+            return
+        self.save_current_project(silent=True)
+        self.statusBar().showMessage("工程已保存", 2500)
+
+    def shortcut_undo_current_stage(self):
+        if self.current_room_index == 1 and hasattr(self.room_edit, "undo") and not self._focus_is_text_editor():
+            self.room_edit.undo()
+            return
+        focused = QApplication.focusWidget()
+        if self._focus_is_text_editor() and hasattr(focused, "undo"):
+            focused.undo()
+
+    def shortcut_redo_current_stage(self):
+        if self.current_room_index == 1 and hasattr(self.room_edit, "redo") and not self._focus_is_text_editor():
+            self.room_edit.redo()
+            return
+        focused = QApplication.focusWidget()
+        if self._focus_is_text_editor() and hasattr(focused, "redo"):
+            focused.redo()
 
     def _build_file_menu(self):
         menu = QMenu(self)
@@ -176,7 +231,7 @@ class SubtitledvideoPro(QMainWindow):
         menu.addSeparator()
         menu.addAction(self._action("保存当前工程", lambda: self.save_current_project(False), "Ctrl+S"))
         menu.addAction(self._action("进入工程大厅", lambda: self.switch_room(0)))
-        menu.addAction(self._action("打开导出中心", lambda: self.switch_room(4)))
+        menu.addAction(self._action("打开导出中心", lambda: self.switch_room(3)))
         menu.addSeparator()
         menu.addAction(self._action("退出软件", self.close, "Alt+F4"))
         return menu
@@ -191,8 +246,11 @@ class SubtitledvideoPro(QMainWindow):
 
     def _build_view_menu(self):
         menu = QMenu(self)
-        for idx, name in enumerate(["工程大厅", "精修", "小工具", "批量", "导出", "设置"]):
-            menu.addAction(self._action(name, lambda checked=False, i=idx: self.switch_room(i)))
+        menu.addAction(self._action("工程大厅", lambda: self.switch_room(0)))
+        menu.addAction(self._action("精修", lambda: self.switch_room(1, workspace_key="edit")))
+        menu.addAction(self._action("批量", lambda: self.switch_room(2)))
+        menu.addAction(self._action("导出", lambda: self.switch_room(3)))
+        menu.addAction(self._action("设置", lambda: self.switch_room(4)))
         menu.addSeparator()
         self.action_show_nav = self._action("显示底部房间导航", self.toggle_bottom_nav_from_menu, checkable=True, checked=True)
         menu.addAction(self.action_show_nav)
@@ -225,7 +283,6 @@ class SubtitledvideoPro(QMainWindow):
 
         self.btn_project = QPushButton("📁 工程")
         self.btn_edit = QPushButton("🎬 精修")
-        self.btn_scroll = QPushButton("🧰 小工具")
         self.btn_batch = QPushButton("📦 批量")
         self.btn_deliver = QPushButton("🚀 导出")
         self.btn_settings = QPushButton("⚙️ 设置")
@@ -233,11 +290,17 @@ class SubtitledvideoPro(QMainWindow):
         self.nav_buttons = [
             self.btn_project,
             self.btn_edit,
-            self.btn_scroll,
             self.btn_batch,
             self.btn_deliver,
             self.btn_settings,
         ]
+        self.nav_button_keys = {
+            self.btn_project: "project",
+            self.btn_edit: "edit",
+            self.btn_batch: "batch",
+            self.btn_deliver: "deliver",
+            self.btn_settings: "settings",
+        }
 
         for btn in self.nav_buttons:
             btn.setStyleSheet(nav_btn_style)
@@ -250,11 +313,10 @@ class SubtitledvideoPro(QMainWindow):
         self.main_layout.addWidget(self.nav_widget)
 
         self.btn_project.clicked.connect(lambda: self.switch_room(0))
-        self.btn_edit.clicked.connect(lambda: self.switch_room(1))
-        self.btn_scroll.clicked.connect(lambda: self.switch_room(2))
-        self.btn_batch.clicked.connect(lambda: self.switch_room(3))
-        self.btn_deliver.clicked.connect(lambda: self.switch_room(4))
-        self.btn_settings.clicked.connect(lambda: self.switch_room(5))
+        self.btn_edit.clicked.connect(lambda: self.switch_room(1, workspace_key="edit"))
+        self.btn_batch.clicked.connect(lambda: self.switch_room(2))
+        self.btn_deliver.clicked.connect(lambda: self.switch_room(3))
+        self.btn_settings.clicked.connect(lambda: self.switch_room(4))
 
     def apply_chrome_theme(self, theme_key):
         colors = PROJECT_HALL_THEMES.get(theme_key, PROJECT_HALL_THEMES["dark_star"])
@@ -324,15 +386,44 @@ class SubtitledvideoPro(QMainWindow):
     def toggle_bottom_nav_from_menu(self, checked):
         self.nav_widget.setVisible(bool(checked))
 
+    def _workspace_key_for_room(self, index, workspace_key=None):
+        if workspace_key:
+            return workspace_key
+        return {
+            0: "project",
+            1: "edit",
+            2: "batch",
+            3: "deliver",
+            4: "settings",
+        }.get(index, "project")
+
+    def _room_history_entry(self, index, workspace_key=None):
+        return (int(index), self._workspace_key_for_room(index, workspace_key))
+
+    def _normalize_history_entry(self, entry):
+        if isinstance(entry, tuple) and len(entry) == 2:
+            return int(entry[0]), str(entry[1])
+        return int(entry), self._workspace_key_for_room(int(entry))
+
+    def _update_nav_selection(self):
+        active_key = self._workspace_key_for_room(self.current_room_index, self.current_workspace_key)
+        for btn in getattr(self, "nav_buttons", []):
+            btn.setChecked(getattr(self, "nav_button_keys", {}).get(btn) == active_key)
+
+    def open_design_workspace(self):
+        self.switch_room(1, workspace_key="edit")
+
     def go_back(self):
         if self.room_history_pos > 0:
             self.room_history_pos -= 1
-            self.switch_room(self.room_history[self.room_history_pos], record_history=False)
+            index, key = self._normalize_history_entry(self.room_history[self.room_history_pos])
+            self.switch_room(index, workspace_key=key, record_history=False)
 
     def go_forward(self):
         if self.room_history_pos < len(self.room_history) - 1:
             self.room_history_pos += 1
-            self.switch_room(self.room_history[self.room_history_pos], record_history=False)
+            index, key = self._normalize_history_entry(self.room_history[self.room_history_pos])
+            self.switch_room(index, workspace_key=key, record_history=False)
 
     def update_history_buttons(self):
         if hasattr(self, "btn_back"):
@@ -344,9 +435,6 @@ class SubtitledvideoPro(QMainWindow):
         try:
             if self.current_room_index == 1 and hasattr(self.room_edit, "save_to_project"):
                 self.project = self.room_edit.save_to_project(silent=True)
-            elif self.current_room_index == 2 and hasattr(self.room_scroll, "export_state"):
-                self.project = update_room_state(self.project, "scroll_room", self.room_scroll.export_state())
-                self.room_scroll.project_data = self.project
             elif hasattr(self.room_edit, "save_to_project"):
                 self.project = self.room_edit.save_to_project(silent=True)
             self.refresh_room_links()
@@ -402,9 +490,9 @@ class SubtitledvideoPro(QMainWindow):
         QMessageBox.information(
             self,
             "软件架构",
-            "软件分成 6 个房间：工程大厅、精修、小工具、批量、导出、设置。\n\n"
+            "软件分成 5 个工作区：工程大厅、精修、批量、导出、设置。\n\n"
             "工程文件是 .scomp，素材会放入工程 assets；云端模式下 Google Drive 会同步这些工程文件和素材。\n\n"
-            "精修房间负责字幕、时间轴、样式和预览；导出房间读取当前工程并渲染成视频。"
+            "精修负责字幕、音频、样式和逐句调整；批量负责多队列字幕工程与视频生产；导出房间读取当前工程并渲染成视频。"
         )
 
     def show_cloud_help(self):
@@ -419,7 +507,6 @@ class SubtitledvideoPro(QMainWindow):
     def create_rooms(self):
         self.room_project = ProjectView(self.project, self)
         self.room_edit = EditView(self.project, self)
-        self.room_scroll = ScrollView(self.project, self)
         self.room_batch = BatchView(self)
         self.room_deliver = DeliverView(self.project, self)
         self.room_settings = SettingsView(self)
@@ -427,7 +514,6 @@ class SubtitledvideoPro(QMainWindow):
         self.rooms = [
             self.room_project,
             self.room_edit,
-            self.room_scroll,
             self.room_batch,
             self.room_deliver,
             self.room_settings,
@@ -435,14 +521,43 @@ class SubtitledvideoPro(QMainWindow):
         for room in self.rooms:
             self.stack.addWidget(room)
         self.apply_chrome_theme(getattr(self.room_project, "project_theme", "dark_star"))
+        self.create_global_shortcuts()
 
     def open_default_room(self):
         self.switch_room(0, initial=True)
 
+    def _natural_project_sort_key(self, path):
+        name = os.path.basename(path or "").lower()
+        return [int(part) if part.isdigit() else part for part in re.split(r"(\d+)", name)]
+
+    def current_project_folder_progress(self):
+        project_path = self.project.get("project_path", "") if isinstance(self.project, dict) else ""
+        if not project_path:
+            return None
+        project_path = os.path.abspath(project_path)
+        folder = os.path.dirname(project_path)
+        if not os.path.isdir(folder):
+            return None
+        paths = [
+            os.path.abspath(os.path.join(folder, name))
+            for name in os.listdir(folder)
+            if name.lower().endswith(".scomp") and os.path.isfile(os.path.join(folder, name))
+        ]
+        if not paths:
+            return None
+        paths.sort(key=self._natural_project_sort_key)
+        normalized_current = os.path.normcase(project_path)
+        index = next((i for i, path in enumerate(paths) if os.path.normcase(path) == normalized_current), -1)
+        if index < 0:
+            return None
+        return index + 1, len(paths)
+
     def refresh_room_links(self):
         if hasattr(self, "project_label"):
             project_name = self.project.get("project_name") or os.path.basename(self.project.get("project_path", "")) or "未命名工程"
-            self.project_label.setText(f"当前工程：{project_name}")
+            progress = self.current_project_folder_progress()
+            progress_text = f"  |  文件夹进度：{progress[0]}/{progress[1]}" if progress else ""
+            self.project_label.setText(f"当前工程：{project_name}{progress_text}")
 
         if hasattr(self, "room_project"):
             self.room_project.project_data = self.project
@@ -450,11 +565,8 @@ class SubtitledvideoPro(QMainWindow):
 
         if hasattr(self.room_edit, "project_data"):
             self.room_edit.project_data = self.project
-
-        if hasattr(self.room_scroll, "project_data"):
-            self.room_scroll.project_data = self.project
-        if hasattr(self.room_scroll, "load_from_project"):
-            self.room_scroll.load_from_project(self.project)
+        if hasattr(self.room_edit, "sync_design_panel_controls"):
+            self.room_edit.sync_design_panel_controls()
 
         if hasattr(self.room_deliver, "project_data"):
             self.room_deliver.project_data = self.project
@@ -467,11 +579,6 @@ class SubtitledvideoPro(QMainWindow):
         if hasattr(self.room_edit, "load_project_on_boot"):
             self.room_edit.load_project_on_boot()
 
-        if hasattr(self.room_scroll, "project_data"):
-            self.room_scroll.project_data = self.project
-        if hasattr(self.room_scroll, "load_from_project"):
-            self.room_scroll.load_from_project(self.project)
-
         if hasattr(self.room_deliver, "project_data"):
             self.room_deliver.project_data = self.project
         if hasattr(self.room_deliver, "load_project_data"):
@@ -479,30 +586,33 @@ class SubtitledvideoPro(QMainWindow):
 
         self.refresh_room_links()
 
-    def switch_room(self, index, initial=False, record_history=True):
+    def switch_room(self, index, initial=False, record_history=True, workspace_key=None):
         if not initial and self.current_room_index == 1 and hasattr(self.room_edit, "save_to_project"):
             self.project = self.room_edit.save_to_project(silent=True)
 
-        if not initial and self.current_room_index == 2 and hasattr(self.room_scroll, "export_state"):
-            self.project = update_room_state(self.project, "scroll_room", self.room_scroll.export_state())
-            self.room_scroll.project_data = self.project
-
+        workspace_key = self._workspace_key_for_room(index, workspace_key)
         self.current_room_index = index
+        self.current_workspace_key = workspace_key
         if record_history:
+            entry = self._room_history_entry(index, workspace_key)
             if self.room_history_pos < len(self.room_history) - 1:
                 self.room_history = self.room_history[:self.room_history_pos + 1]
-            if not self.room_history or self.room_history[-1] != index:
-                self.room_history.append(index)
+            if not self.room_history or self.room_history[-1] != entry:
+                self.room_history.append(entry)
                 self.room_history_pos = len(self.room_history) - 1
             elif self.room_history_pos == -1:
                 self.room_history_pos = 0
         self.refresh_room_links()
         self.stack.setCurrentIndex(index)
 
-        for i, btn in enumerate(self.nav_buttons):
-            btn.setChecked(i == index)
+        self._update_nav_selection()
 
-        if index == 4 and hasattr(self.room_deliver, "load_project_data"):
+        if index == 1 and hasattr(self.room_edit, "update_floating_subtitle"):
+            if hasattr(self.room_edit, "set_workspace_mode"):
+                self.room_edit.set_workspace_mode("edit")
+            self.room_edit.last_render_hash = None
+            self.room_edit.update_floating_subtitle()
+        if index == 3 and hasattr(self.room_deliver, "load_project_data"):
             self.room_deliver.load_project_data()
         self.update_history_buttons()
 

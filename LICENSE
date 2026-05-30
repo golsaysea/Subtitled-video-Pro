@@ -1,6 +1,6 @@
 # Project License Compliance Report
 
-> Generated: 2026-05-16
+> Generated: 2026-05-30
 > Audit guide: https://tpscsm-docs.pages.dev/license-audit/
 > This report is for compliance reference only and is not legal advice.
 
@@ -34,7 +34,7 @@ documents a valid Riverbank commercial license for PyQt/PyQt-WebEngine.
 - Keep `GPL-3.0-only` project license notice visible in the repository and
   release package.
 - Preserve third-party license notices for PyQt6, PyQt6-WebEngine, requests,
-  playwright, bundled fonts, and any packaged browser/runtime data.
+  playwright, konva, bundled fonts, and any packaged browser/runtime data.
 - Keep OFL license files alongside redistributed font files under `fonts/open`.
 - If FFmpeg GPL binaries are bundled, include FFmpeg notices and source-offer
   information; if the app only downloads FFmpeg on demand, document that the
@@ -47,6 +47,7 @@ documents a valid Riverbank commercial license for PyQt/PyQt-WebEngine.
 | --- | ---: | --- |
 | Strong copyleft (`GPL-3.0-only`) | 2 | Compatible with GPL-3.0-only project baseline |
 | Permissive (`Apache-2.0`) | 2 | Compatible with GPL-3.0-only project baseline; preserve notices |
+| Permissive (`MIT`) | 1 | Compatible with GPL-3.0-only project baseline; preserve notices |
 | Unknown | 0 | None found in direct runtime dependencies |
 | Non-open-source | 0 | None found in direct runtime dependencies |
 
@@ -60,6 +61,7 @@ Bundled asset note: `fonts/open/open_fonts_manifest.json` records 21 bundled fon
 | PyQt6-WebEngine | GPL-3.0-only or commercial | Compatible under GPL-3.0-only | Same PyQt commercial/GPL boundary; Riverbank states PyQt-WebEngine is not LGPL |
 | requests | Apache-2.0 | Compatible | Preserve Apache-2.0 license and notices |
 | playwright | Apache-2.0 | Compatible | Preserve Apache-2.0 license and notices; track bundled browser assets separately |
+| konva | MIT | Compatible | Preserve MIT license and notices |
 | Open font pack | OFL-1.1 or compatible open font license | Compatible as bundled font assets | Preserve license files; respect reserved font name rules if modified |
 
 ## Third-Party License Notices
@@ -73,6 +75,10 @@ Bundled asset note: `fonts/open/open_fonts_manifest.json` records 21 bundled fon
 
 - `requests==2.34.2` — Python Software Foundation / Requests maintainers.
 - `playwright==1.59.0` — Microsoft Corporation.
+
+### MIT
+
+- `konva==10.3.0` — Anton Lavrenov / Konva maintainers.
 
 ### OFL-1.1 / Compatible Open Font Licenses
 

@@ -4,10 +4,11 @@
 import os
 import json
 import threading
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLabel, 
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLabel,
                              QTextEdit, QPushButton, QMessageBox, QFrame,
-                             QHBoxLayout, QLineEdit, QScrollArea)
-from PyQt6.QtCore import Qt, QUrl, pyqtSignal
+                             QHBoxLayout, QLineEdit, QScrollArea, QComboBox,
+                             QCheckBox, QFileDialog, QProgressDialog)
+from PyQt6.QtCore import Qt, QUrl, QTimer, pyqtSignal
 from PyQt6.QtGui import QDesktopServices
 import requests
 
@@ -21,6 +22,16 @@ from render_config import (
     peek_render_profile,
 )
 from font_registry import FONT_REGISTRY_FILE, STATUS_NONCOMMERCIAL, load_font_registry, reset_to_open_font_policy, upsert_approved_fonts
+from app_config import OUTPUT_RESOLUTION_OPTIONS, get_output_resolution, set_output_resolution
+from app_update import (
+    check_latest_release,
+    download_asset,
+    load_update_config,
+    normalize_repo,
+    pick_release_asset,
+    release_download_dir,
+    save_update_config,
+)
 
 CONFIG_FILE = os.path.join(os.getcwd(), "settings.json")
 
@@ -90,12 +101,21 @@ class SettingsSection(QWidget):
 class SettingsView(QWidget):
     sig_sync_finished = pyqtSignal(bool, str, object)
     sig_hardware_finished = pyqtSignal(bool, str, object)
+    sig_update_checked = pyqtSignal(bool, str, object)
+    sig_update_progress = pyqtSignal(int, int)
+    sig_update_downloaded = pyqtSignal(bool, str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.init_ui()
         self.sig_sync_finished.connect(self.on_sync_finished)
         self.sig_hardware_finished.connect(self.on_hardware_finished)
+        self.sig_update_checked.connect(self.on_update_checked)
+        self.sig_update_progress.connect(self.on_update_progress)
+        self.sig_update_downloaded.connect(self.on_update_downloaded)
+        self._latest_release = None
+        self._update_progress_dialog = None
+        self._auto_update_check_started = False
         self.load_config()
 
     def init_ui(self):
@@ -241,6 +261,96 @@ class SettingsView(QWidget):
         hardware_layout.addLayout(hardware_btn_row)
 
         self.hardware_section = self._add_section(layout, "硬件扫描与渲染优化", hardware_frame, "#a6e3a1", expanded=True)
+
+        resolution_frame = QFrame()
+        resolution_frame.setStyleSheet("background-color: #181825; border-radius: 10px; border: 1px solid #cba6f7;")
+        resolution_layout = QVBoxLayout(resolution_frame)
+        resolution_layout.setContentsMargins(25, 18, 25, 18)
+        resolution_layout.setSpacing(10)
+
+        lbl_resolution_title = QLabel("画面分辨率")
+        lbl_resolution_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #cba6f7; border: none;")
+        resolution_layout.addWidget(lbl_resolution_title)
+
+        lbl_resolution_desc = QLabel("固定工程与批量渲染画布，默认 1080x1920。字幕字号、设计组件和素材缩放都会按这份画布统一计算。")
+        lbl_resolution_desc.setWordWrap(True)
+        lbl_resolution_desc.setStyleSheet("color: #a6adc8; font-size: 13px; border: none;")
+        resolution_layout.addWidget(lbl_resolution_desc)
+
+        self.output_resolution_combo = QComboBox()
+        self.output_resolution_combo.addItems(OUTPUT_RESOLUTION_OPTIONS)
+        self.output_resolution_combo.setCurrentText(get_output_resolution())
+        self.output_resolution_combo.setStyleSheet("background-color: #11111b; color: #cdd6f4; border: 1px solid #45475a; border-radius: 6px; padding: 8px; font-weight: bold;")
+        self.output_resolution_combo.currentTextChanged.connect(self.save_output_resolution_ui)
+        resolution_layout.addWidget(self.output_resolution_combo)
+
+        self.lbl_output_resolution = QLabel("")
+        self.lbl_output_resolution.setStyleSheet("color: #a6e3a1; font-size: 12px; border: none;")
+        resolution_layout.addWidget(self.lbl_output_resolution)
+
+        self.resolution_section = self._add_section(layout, "画面分辨率", resolution_frame, "#cba6f7", expanded=True)
+
+        update_frame = QFrame()
+        update_frame.setStyleSheet("background-color: #181825; border-radius: 10px; border: 1px solid #74c7ec;")
+        update_layout = QVBoxLayout(update_frame)
+        update_layout.setContentsMargins(25, 18, 25, 18)
+        update_layout.setSpacing(10)
+
+        lbl_update_title = QLabel("软件更新与下载")
+        lbl_update_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #74c7ec; border: none;")
+        update_layout.addWidget(lbl_update_title)
+
+        lbl_update_desc = QLabel("配置 GitHub Release 仓库后，可以在软件内检查最新版本并下载安装包。")
+        lbl_update_desc.setWordWrap(True)
+        lbl_update_desc.setStyleSheet("color: #a6adc8; font-size: 13px; border: none;")
+        update_layout.addWidget(lbl_update_desc)
+
+        update_repo_row = QHBoxLayout()
+        update_repo_row.addWidget(QLabel("Release 仓库:", styleSheet="color: #cdd6f4; border: none;"))
+        self.txt_update_repo = QLineEdit()
+        self.txt_update_repo.setPlaceholderText("owner/repo 或 https://github.com/owner/repo")
+        self.txt_update_repo.setStyleSheet("background-color: #11111b; color: #cdd6f4; border: 1px solid #45475a; border-radius: 6px; padding: 8px;")
+        self.txt_update_version = QLineEdit()
+        self.txt_update_version.setPlaceholderText("当前版本")
+        self.txt_update_version.setFixedWidth(130)
+        self.txt_update_version.setStyleSheet("background-color: #11111b; color: #cdd6f4; border: 1px solid #45475a; border-radius: 6px; padding: 8px;")
+        update_repo_row.addWidget(self.txt_update_repo, stretch=1)
+        update_repo_row.addWidget(self.txt_update_version)
+        update_layout.addLayout(update_repo_row)
+
+        update_dir_row = QHBoxLayout()
+        update_dir_row.addWidget(QLabel("下载位置:", styleSheet="color: #cdd6f4; border: none;"))
+        self.txt_update_dir = QLineEdit()
+        self.txt_update_dir.setPlaceholderText("默认保存到当前目录/updates")
+        self.txt_update_dir.setStyleSheet("background-color: #11111b; color: #cdd6f4; border: 1px solid #45475a; border-radius: 6px; padding: 8px;")
+        self.btn_update_dir = QPushButton("选择目录")
+        self.btn_update_dir.setStyleSheet("background-color: #313244; color: #cdd6f4; font-weight: bold; border-radius: 6px; padding: 8px 12px;")
+        self.btn_update_dir.clicked.connect(self.select_update_download_dir)
+        update_dir_row.addWidget(self.txt_update_dir, stretch=1)
+        update_dir_row.addWidget(self.btn_update_dir)
+        update_layout.addLayout(update_dir_row)
+
+        update_btn_row = QHBoxLayout()
+        self.chk_update_auto = QCheckBox("启动后自动检查")
+        self.chk_update_auto.setStyleSheet("color: #a6e3a1; border: none; font-weight: bold;")
+        self.btn_update_check = QPushButton("检查更新")
+        self.btn_update_download = QPushButton("下载最新包")
+        self.btn_update_download.setEnabled(False)
+        for btn in (self.btn_update_check, self.btn_update_download):
+            btn.setStyleSheet("background-color: #74c7ec; color: #11111b; font-weight: bold; border-radius: 6px; padding: 8px 14px;")
+        self.btn_update_check.clicked.connect(self.check_updates_ui)
+        self.btn_update_download.clicked.connect(self.download_update_ui)
+        update_btn_row.addWidget(self.chk_update_auto)
+        update_btn_row.addStretch()
+        update_btn_row.addWidget(self.btn_update_check)
+        update_btn_row.addWidget(self.btn_update_download)
+        update_layout.addLayout(update_btn_row)
+
+        self.lbl_update_status = QLabel("就绪")
+        self.lbl_update_status.setWordWrap(True)
+        self.lbl_update_status.setStyleSheet("color: #f9e2af; background-color: #11111b; border: 1px solid #313244; border-radius: 6px; padding: 8px; font-size: 12px;")
+        update_layout.addWidget(self.lbl_update_status)
+        self.update_section = self._add_section(layout, "软件更新与下载", update_frame, "#74c7ec", expanded=False)
 
         font_frame = QFrame()
         font_frame.setStyleSheet("background-color: #181825; border-radius: 10px; border: 1px solid #f9e2af;")
@@ -390,6 +500,19 @@ class SettingsView(QWidget):
         for section in getattr(self, "setting_sections", []):
             section.apply_section_theme(colors)
 
+    def save_output_resolution_ui(self, value):
+        saved = set_output_resolution(value)
+        if hasattr(self, "lbl_output_resolution"):
+            self.lbl_output_resolution.setText(f"当前固定画布：{saved}")
+        parent = self.parent()
+        while parent is not None and not hasattr(parent, "room_edit"):
+            parent = parent.parent()
+        if parent and hasattr(parent, "room_edit"):
+            try:
+                parent.room_edit.on_resolution_changed(saved)
+            except Exception:
+                pass
+
     def load_config(self):
         if os.path.exists(CONFIG_FILE):
             try:
@@ -407,6 +530,121 @@ class SettingsView(QWidget):
         self.load_font_registry_ui()
         self.refresh_font_asset_label()
         self.refresh_hardware_profile_label()
+        if hasattr(self, "output_resolution_combo"):
+            current_resolution = get_output_resolution()
+            self.output_resolution_combo.blockSignals(True)
+            self.output_resolution_combo.setCurrentText(current_resolution)
+            self.output_resolution_combo.blockSignals(False)
+            self.lbl_output_resolution.setText(f"当前固定画布：{current_resolution}")
+        self.load_update_ui()
+
+    def load_update_ui(self):
+        if not hasattr(self, "txt_update_repo"):
+            return
+        cfg = load_update_config()
+        self.txt_update_repo.setText(cfg.get("repo", ""))
+        self.txt_update_version.setText(cfg.get("current_version", "0.1.0"))
+        self.txt_update_dir.setText(cfg.get("download_dir", ""))
+        self.chk_update_auto.setChecked(bool(cfg.get("auto_check", True)))
+        self.lbl_update_status.setText(f"下载目录：{release_download_dir(cfg)}")
+        if cfg.get("auto_check", True) and cfg.get("repo") and not self._auto_update_check_started:
+            self._auto_update_check_started = True
+            QTimer.singleShot(1800, self.check_updates_ui)
+
+    def _current_update_config_from_ui(self):
+        return {
+            "repo": normalize_repo(self.txt_update_repo.text()),
+            "current_version": self.txt_update_version.text().strip() or "0.1.0",
+            "download_dir": self.txt_update_dir.text().strip(),
+            "auto_check": self.chk_update_auto.isChecked(),
+        }
+
+    def save_update_ui(self):
+        cfg = save_update_config(self._current_update_config_from_ui())
+        self.txt_update_repo.setText(cfg.get("repo", ""))
+        self.lbl_update_status.setText(f"更新设置已保存。下载目录：{release_download_dir(cfg)}")
+        return cfg
+
+    def select_update_download_dir(self):
+        folder = QFileDialog.getExistingDirectory(self, "选择更新包下载目录", self.txt_update_dir.text().strip() or os.getcwd())
+        if folder:
+            self.txt_update_dir.setText(folder)
+            self.save_update_ui()
+
+    def check_updates_ui(self):
+        cfg = self.save_update_ui()
+        self.btn_update_check.setEnabled(False)
+        self.btn_update_download.setEnabled(False)
+        self.lbl_update_status.setText("正在检查 GitHub Release...")
+        threading.Thread(target=self._check_updates_thread, args=(cfg,), daemon=True).start()
+
+    def _check_updates_thread(self, cfg):
+        try:
+            release = check_latest_release(cfg.get("repo", ""), cfg.get("current_version", ""))
+            self.sig_update_checked.emit(True, "", release)
+        except Exception as e:
+            self.sig_update_checked.emit(False, str(e), {})
+
+    def on_update_checked(self, ok, message, release):
+        self.btn_update_check.setEnabled(True)
+        if not ok:
+            self._latest_release = None
+            self.lbl_update_status.setText(f"检查失败：{message}")
+            return
+        self._latest_release = release
+        asset = pick_release_asset(release)
+        asset_text = f"\n可下载：{asset.get('name')}" if asset else "\n没有找到可下载资源。"
+        newer = "发现新版本" if release.get("is_newer") else "当前已是最新或版本号未递增"
+        self.lbl_update_status.setText(
+            f"{newer}：{release.get('tag_name')}\n"
+            f"发布时间：{release.get('published_at', '')}\n"
+            f"Release：{release.get('html_url', '')}{asset_text}"
+        )
+        self.btn_update_download.setEnabled(bool(asset))
+
+    def download_update_ui(self):
+        if not self._latest_release:
+            return QMessageBox.information(self, "请先检查", "请先检查更新，再下载最新安装包。")
+        asset = pick_release_asset(self._latest_release)
+        if not asset:
+            return QMessageBox.warning(self, "没有资源", "这个 Release 没有可下载的安装包资源。")
+        cfg = self.save_update_ui()
+        target_dir = release_download_dir(cfg)
+        self.btn_update_download.setEnabled(False)
+        self._update_progress_dialog = QProgressDialog("正在下载更新包...", "取消", 0, 100, self)
+        self._update_progress_dialog.setWindowTitle("下载更新")
+        self._update_progress_dialog.setAutoClose(False)
+        self._update_progress_dialog.setValue(0)
+        threading.Thread(target=self._download_update_thread, args=(asset, target_dir), daemon=True).start()
+
+    def _download_update_thread(self, asset, target_dir):
+        try:
+            def progress(done, total):
+                self.sig_update_progress.emit(int(done), int(total))
+            path = download_asset(asset, target_dir, progress_callback=progress)
+            self.sig_update_downloaded.emit(True, path)
+        except Exception as e:
+            self.sig_update_downloaded.emit(False, str(e))
+
+    def on_update_progress(self, done, total):
+        if not self._update_progress_dialog:
+            return
+        if total > 0:
+            self._update_progress_dialog.setValue(max(0, min(100, int(done * 100 / total))))
+        else:
+            self._update_progress_dialog.setValue(0)
+
+    def on_update_downloaded(self, ok, message):
+        self.btn_update_download.setEnabled(bool(self._latest_release))
+        if self._update_progress_dialog:
+            self._update_progress_dialog.close()
+            self._update_progress_dialog = None
+        if ok:
+            self.lbl_update_status.setText(f"更新包已下载：\n{message}")
+            QMessageBox.information(self, "下载完成", f"更新包已保存到：\n{message}")
+        else:
+            self.lbl_update_status.setText(f"下载失败：{message}")
+            QMessageBox.critical(self, "下载失败", message)
 
     def load_font_registry_ui(self):
         if not hasattr(self, "txt_approved_fonts"):
@@ -606,7 +844,7 @@ class SettingsView(QWidget):
             if not cloud_secret:
                 raise Exception("Cloud sync secret is not configured. Set SUBTITLE_COMPOSER_CLOUD_SECRET or add cloud_secret in local settings.json.")
             headers = {"X-App-Auth": cloud_secret}
-            res = requests.get(url, headers=headers, timeout=12, verify=False)
+            res = requests.get(url, headers=headers, timeout=12)
             if res.status_code == 401:
                 raise Exception("云端拒绝访问：密钥错误或 Workers 鉴权不通过。")
             res.raise_for_status()

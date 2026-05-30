@@ -5,7 +5,7 @@
 - 项目名称：Subtitle Composer / Subtitled Video Pro
 - 项目路径：`0516`
 - 项目类型：Python desktop app + Vite web tool panels + bundled open font assets
-- 审计时间：2026-05-16
+- 审计时间：2026-05-30
 - 审计基准：公开 GitHub 开源分发
 - 审计范围：直接运行依赖；构建工具、外部可执行组件和字体资产单独列示
 
@@ -19,14 +19,16 @@
 
 0516 新增的 `fonts/open` 字体包按发布资产审计：当前 manifest 记录 21 个字体文件，许可证为 `OFL-1.1` 或兼容开放字体许可证。字体资产与 GPL-3.0-only 项目分发兼容，但必须保留各字体目录内的 `OFL.txt`、`LICENSE.txt` 或 `LICENSE.md`。
 
+0519 新增的 `web_tools` 设计房间依赖 `konva@10.3.0`，许可证为 `MIT`，用于 Canva 式页面/图层画布编辑。该依赖与 GPL-3.0-only 项目基准兼容，需在发布包中保留 MIT notices。
+
 ## 审计结果摘要
 
 | 指标 | 数值 |
 | --- | ---: |
-| 直接运行依赖总数 | 4 |
-| 已确认协议 | 4 |
+| 直接运行依赖总数 | 5 |
+| 已确认协议 | 5 |
 | 未确认协议 | 0 |
-| 低风险 | 2 |
+| 低风险 | 3 |
 | 需关注 | 2 |
 | 需手动确认 | 0 |
 | 发布相关字体文件 | 21 |
@@ -35,8 +37,9 @@
 
 | 协议 | 数量 | 占比 | 说明 |
 | --- | ---: | ---: | --- |
-| GPL-3.0-only | 2 | 50% | 强 copyleft；决定项目开源分发基准 |
-| Apache-2.0 | 2 | 50% | 与 GPL-3.0-only 兼容；需保留 notices |
+| GPL-3.0-only | 2 | 40% | 强 copyleft；决定项目开源分发基准 |
+| Apache-2.0 | 2 | 40% | 与 GPL-3.0-only 兼容；需保留 notices |
+| MIT | 1 | 20% | 与 GPL-3.0-only 兼容；需保留 notices |
 
 字体资产：21 个字体文件，按 `OFL-1.1` 或兼容开放字体许可证单独记录，不计入直接运行依赖总数。
 
@@ -48,6 +51,7 @@
 | PyQt6-WebEngine | 6.11.0 | GPL-3.0-only 或商业许可 | https://pypi.org/project/PyQt6-WebEngine/ | 需按 GPL-3.0-only 分发，Riverbank 说明其不提供 LGPL 路径 |
 | requests | 2.34.2 | Apache-2.0 | https://pypi.org/project/requests/ | 与 GPL-3.0-only 兼容 |
 | playwright | 1.59.0 | Apache-2.0 | https://pypi.org/project/playwright/ | 与 GPL-3.0-only 兼容 |
+| konva | 10.3.0 | MIT | https://www.npmjs.com/package/konva | 与 GPL-3.0-only 兼容；用于设计房间 canvas 图层编辑 |
 
 ## 发布资产明细
 

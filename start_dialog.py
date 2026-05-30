@@ -15,15 +15,12 @@ class StartDialog(QDialog):
         layout = QVBoxLayout()
 
         btn_new_edit = QPushButton("新建工程（逐句精修）")
-        btn_new_scroll = QPushButton("新建工程（滚动字幕）")
         btn_open = QPushButton("打开工程")
 
         btn_new_edit.clicked.connect(lambda checked=False: self.new_edit())
-        btn_new_scroll.clicked.connect(lambda checked=False: self.new_scroll())
         btn_open.clicked.connect(lambda checked=False: self.open_project())
 
         layout.addWidget(btn_new_edit)
-        layout.addWidget(btn_new_scroll)
         layout.addWidget(btn_open)
 
         self.setLayout(layout)
@@ -32,13 +29,6 @@ class StartDialog(QDialog):
         path, _ = QFileDialog.getSaveFileName(self, "保存工程", "", "Project (*.scomp)")
         if path:
             self.project_data = create_project(path, "edit_room")
-            self.project_path = path
-            self.accept()
-
-    def new_scroll(self):
-        path, _ = QFileDialog.getSaveFileName(self, "保存工程", "", "Project (*.scomp)")
-        if path:
-            self.project_data = create_project(path, "scroll_room")
             self.project_path = path
             self.accept()
 

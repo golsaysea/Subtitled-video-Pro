@@ -11,7 +11,7 @@
 5. Confirm `fonts/open/open_fonts_manifest.json` matches the bundled font files
    and that font license files remain beside the fonts.
 6. Build `web_tools/dist` from current TypeScript sources.
-7. Push a clean tag such as `v0.1.0`.
+7. Push a clean tag such as `V0.1.12`.
 
 ## Recommended First Public Push
 
@@ -41,8 +41,8 @@ git push -u origin main
 
 ```powershell
 git status --short
-git tag v0.1.0
-git push origin v0.1.0
+git tag V0.1.12
+git push origin V0.1.12
 ```
 
 The `Release` workflow will:
@@ -66,24 +66,24 @@ and notarization secrets to the workflow before publishing broadly.
 
 ## Manual Workflow Release
 
-In GitHub Actions, run `Release` manually and enter a version like `v0.1.0`.
+In GitHub Actions, run `Release` manually and enter a version like `V0.1.12`.
 
 ## Verify After Release
 
 ```powershell
-gh release download v0.1.0 -R <owner>/<repo>
-Get-FileHash .\SubtitleComposer-v0.1.0-windows-x64.zip -Algorithm SHA256
+gh release download V0.1.12 -R secure-artifacts/Subtitled-video-Pro
+Get-FileHash .\SubtitleComposer-V0.1.12-windows-x64.zip -Algorithm SHA256
 Get-Content .\checksums.sha256
-gh attestation verify .\SubtitleComposer-v0.1.0-windows-x64.zip -R <owner>/<repo>
+gh attestation verify .\SubtitleComposer-V0.1.12-windows-x64.zip -R secure-artifacts/Subtitled-video-Pro
 ```
 
 For macOS:
 
 ```bash
-gh release download v0.1.0 -R <owner>/<repo>
-shasum -a 256 SubtitleComposer-v0.1.0-macos-arm64.zip
+gh release download V0.1.12 -R secure-artifacts/Subtitled-video-Pro
+shasum -a 256 SubtitleComposer-V0.1.12-macos-arm64.zip
 cat checksums.sha256
-gh attestation verify SubtitleComposer-v0.1.0-macos-arm64.zip -R <owner>/<repo>
+gh attestation verify SubtitleComposer-V0.1.12-macos-arm64.zip -R secure-artifacts/Subtitled-video-Pro
 ```
 
 ## Rollback

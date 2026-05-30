@@ -21,6 +21,173 @@ ENGLISH_SUFFIX_TOKENS = {
 }
 
 
+def default_signature_style(base_style=None, scale_from_subtitle=True):
+    style = copy.deepcopy(base_style or {})
+    try:
+        base_size = int(style.get("size", 42) or 42)
+    except Exception:
+        base_size = 42
+    style.update({
+        "size": int(base_size * 0.42) if scale_from_subtitle and base_size > 70 else base_size,
+        "font": style.get("font", "Noto Sans SC"),
+        "font_weight": style.get("font_weight", "700"),
+        "font_style": style.get("font_style", "normal"),
+        "color_txt": style.get("color_txt", "#FFFFFF"),
+        "color_hl": style.get("color_hl", "#FFFFFF"),
+        "bg_mode": "cinematic_frame",
+        "bg_color": style.get("bg_color", "#0B1020"),
+        "bg_alpha": 45,
+        "bg_radius": 26,
+        "bg_padding": 10,
+        "bg_pad_left": 18,
+        "bg_pad_right": 18,
+        "bg_pad_top": 5,
+        "bg_pad_bottom": 6,
+        "hl_bg_color": style.get("hl_bg_color", "#FFFFFF"),
+        "hl_bg_alpha": 0,
+        "stroke_width": min(2, int(style.get("stroke_width", 2) or 2)),
+        "stroke_color": style.get("stroke_color", "#000000"),
+        "stroke_o_width": 0,
+        "shadow_x": 0,
+        "shadow_y": 3,
+        "shadow_blur": 10,
+        "shadow_color": "#000000",
+        "shadow_alpha": 55,
+        "line_height": 1.0,
+        "text_transform": "normal",
+        "text_align": "right",
+        "letter_spacing": 0,
+        "word_spacing": 0,
+        "layout_mode": "standard",
+        "layout_variant": "auto",
+        "box_layout": "auto",
+        "box_width": 0,
+        "box_height": 0,
+        "max_lines": 1,
+        "mask_en": False,
+        "use_hl": False,
+        "hl_glow": False,
+        "anim_type": "none",
+        "font_motion": "none",
+        "hl_motion": "stable",
+        "inactive_alpha": 100,
+        "text_texture": "none",
+    })
+    return style
+
+
+def default_signature_config(base_style=None):
+    return {
+        "enabled": False,
+        "text": "",
+        "placement": "top_right",
+        "margin_x": 5.0,
+        "margin_y": 4.0,
+        "pos_x": 0.0,
+        "pos_y": -42.0,
+        "style": default_signature_style(base_style),
+    }
+
+
+def normalize_signature_config(signature, base_style=None):
+    config = default_signature_config(base_style)
+    if isinstance(signature, dict):
+        sig_style = signature.get("style", {})
+        config.update({k: v for k, v in signature.items() if k != "style"})
+        style = default_signature_style(base_style)
+        if isinstance(sig_style, dict):
+            style.update(sig_style)
+        config["style"] = style
+    return config
+
+
+def default_design_room_state():
+    return {
+        "version": 1,
+        "width": 1080,
+        "height": 1920,
+        "pages": [
+            {
+                "id": "page-1",
+                "name": "页面 1",
+                "duration": 5.0,
+                "layers": [],
+            }
+        ],
+    }
+
+
+def normalize_design_room_state(state):
+    data = copy.deepcopy(state) if isinstance(state, dict) else default_design_room_state()
+    data.setdefault("version", 1)
+    data["width"] = max(1, int(data.get("width", 1080) or 1080))
+    data["height"] = max(1, int(data.get("height", 1920) or 1920))
+    pages = data.get("pages")
+    if not isinstance(pages, list) or not pages:
+        pages = default_design_room_state()["pages"]
+    clean_pages = []
+    for i, page in enumerate(pages):
+        if not isinstance(page, dict):
+            continue
+        clean_page = {
+            "id": str(page.get("id") or f"page-{i + 1}"),
+            "name": str(page.get("name") or f"页面 {i + 1}"),
+            "duration": max(0.1, float(page.get("duration", 5.0) or 5.0)),
+            "layers": [],
+        }
+        for j, layer in enumerate(page.get("layers", []) or []):
+            if not isinstance(layer, dict):
+                continue
+            item = copy.deepcopy(layer)
+            item["id"] = str(item.get("id") or f"layer-{i + 1}-{j + 1}")
+            item["type"] = str(item.get("type") or "text")
+            if item["type"] not in {"text", "rect", "image"}:
+                item["type"] = "text"
+            item["name"] = str(item.get("name") or ("文字" if item["type"] == "text" else "图层"))
+            item["x"] = float(item.get("x", 0) or 0)
+            item["y"] = float(item.get("y", 0) or 0)
+            item["width"] = max(1.0, float(item.get("width", 300) or 300))
+            item["height"] = max(1.0, float(item.get("height", 80) or 80))
+            item["rotation"] = float(item.get("rotation", 0) or 0)
+            item["opacity"] = max(0.0, min(1.0, float(item.get("opacity", 1) or 0)))
+            item["start"] = max(0.0, float(item.get("start", 0.0) or 0.0))
+            item["end"] = max(0.0, float(item.get("end", 0.0) or 0.0))
+            try:
+                item["zIndex"] = int(float(item.get("zIndex", j) or 0))
+            except Exception:
+                item["zIndex"] = j
+            if item["type"] == "image":
+                item["src"] = str(item.get("src", "") or "")
+                item["fit"] = str(item.get("fit", "cover") or "cover")
+            clean_page["layers"].append(item)
+        clean_pages.append(clean_page)
+    if not clean_pages:
+        clean_pages = default_design_room_state()["pages"]
+    data["pages"] = clean_pages
+    return data
+
+
+def design_frame_times(design_state):
+    state = normalize_design_room_state(design_state)
+    times = [0.0]
+    cursor = 0.0
+    for page in state.get("pages", []) or []:
+        page_dur = max(0.1, float(page.get("duration", 5.0) or 5.0))
+        times.append(cursor)
+        for layer in page.get("layers", []) or []:
+            if not isinstance(layer, dict):
+                continue
+            start = max(0.0, float(layer.get("start", 0.0) or 0.0))
+            end = float(layer.get("end", 0.0) or 0.0)
+            if end <= 0:
+                end = page_dur
+            times.append(cursor + min(page_dur, start))
+            times.append(cursor + min(page_dur, max(start, end)))
+        cursor += page_dur
+        times.append(cursor)
+    return sorted(set(round(t, 3) for t in times if t >= 0.0))
+
+
 def _normalize_apostrophes(text):
     return str(text or "").replace("’", "'").replace("‘", "'").replace("`", "'")
 
@@ -776,7 +943,7 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
 
     r, g, b = hex_to_rgb(bg_col)
     hl_r, hl_g, hl_b = hex_to_rgb(hl_bg_col)
-    stable_word_boxes = bg_mode in ("tape", "block", "full_frame", "sweep") and hl_motion == "stable"
+    stable_word_boxes = bg_mode in ("tape", "block", "full_frame", "sweep", "cinematic_frame") and hl_motion == "stable"
 
     words = sub.get("words", [])
     if not words:
@@ -790,6 +957,9 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
 
     content_indices = [i for i, ww in enumerate(words) if _clean_word_text(ww)]
     content_center = (content_indices[0] + content_indices[-1]) / 2.0 if content_indices else (len(words) - 1) / 2.0
+    head_letter_large_variant = layout_mode == "reel_stack" and layout_variant in ("head-letter-large", "initial-large")
+    head_large_variant = layout_mode == "reel_stack" and layout_variant in ("head-large", "head-emphasis", "head-only", "head-uppercase")
+    tail_large_variant = layout_mode == "reel_stack" and layout_variant in ("tail-large", "tail-emphasis", "tail-only", "tail-uppercase")
     if align in ("free_mix", "left_mix"):
         align_seed_text = "".join(_clean_word_text(words[i]) for i in content_indices) if content_indices else str(sub.get("text", ""))
         align_seed = int(clip_start * 1000) + sum(ord(ch) for ch in align_seed_text)
@@ -872,9 +1042,14 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
                     emphasis_idx.add(content_indices[0])
             small_idx.update([i for i in content_indices if i not in emphasis_idx])
         elif layout_mode == "reel_stack":
-            emphasis_idx.add(content_indices[0])
-            if len(content_indices) > 1:
+            if head_large_variant:
+                emphasis_idx.add(content_indices[0])
+            elif tail_large_variant:
                 emphasis_idx.add(content_indices[-1])
+            elif not head_letter_large_variant:
+                emphasis_idx.add(content_indices[0])
+                if len(content_indices) > 1:
+                    emphasis_idx.add(content_indices[-1])
             small_idx.update([i for i in content_indices if i not in emphasis_idx])
         elif layout_mode == "random_focus":
             focus_count = 2 if len(content_indices) <= 5 else 3
@@ -918,6 +1093,20 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
                 return [[items[0]], [items[1]], [items[2], items[3]]]
             return [[item] for item in items[:-2]] + [items[-2:]]
         if layout_mode == "reel_stack":
+            if head_letter_large_variant or head_large_variant:
+                if n <= 2:
+                    return [[item] for item in items]
+                if n <= 4:
+                    return [[items[0]], items[1:]]
+                mid = max(2, min(n - 1, n // 2 + 1))
+                return [[items[0]], items[1:mid], items[mid:]]
+            if tail_large_variant:
+                if n <= 2:
+                    return [[item] for item in items]
+                if n <= 4:
+                    return [items[:-1], [items[-1]]]
+                mid = max(2, min(n - 1, n // 2))
+                return [items[:mid], items[mid:-1], [items[-1]]]
             if n <= 3:
                 return [[item] for item in items]
             if n == 4:
@@ -942,6 +1131,17 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
 
     def _layout_breaks_before(word_idx):
         return word_idx in layout_break_before
+
+    first_content_idx = content_indices[0] if content_indices else None
+    final_content_idx = content_indices[-1] if content_indices else None
+    word_line_indices = {}
+    line_i = 0
+    for word_idx, word in enumerate(words):
+        raw_line_txt = str(word.get("text") or word.get("word") or "")
+        if word_idx > 0 and ("\n" in raw_line_txt or _layout_breaks_before(word_idx)):
+            line_i += 1
+        word_line_indices[word_idx] = line_i
+    holy_line_count = line_i + 1
 
     html_words_fg = []
     html_words_bg = []
@@ -975,11 +1175,34 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
         w_start = float(w.get("start", 0))
         w_end = float(w.get("end", w_start + 0.5))
 
-        word_started = current_time >= w_start
+        holy_line_idx = word_line_indices.get(idx, 0)
+        is_holy_final_word = anim_type == "holy_breath" and idx == final_content_idx
+        holy_speed = max(1.15, pop_speed * 4.8)
+        if is_holy_final_word:
+            holy_speed *= 1.35
+            holy_speed = min(holy_speed, max(0.65, clip_dur * 0.72))
+        else:
+            holy_speed = min(holy_speed, max(0.55, clip_dur * 0.62))
+
+        if anim_type == "holy_breath":
+            line_delay = min(0.70, 0.38 + max(0.0, pop_speed - 0.18) * 0.18)
+            if holy_line_count > 1:
+                line_delay = min(line_delay, max(0.12, clip_dur * 0.32 / max(1, holy_line_count - 1)))
+            holy_reveal_start = max(clip_start, min(w_start, clip_end - 0.05))
+            holy_reveal_start = max(holy_reveal_start, clip_start + holy_line_idx * line_delay)
+            if is_holy_final_word:
+                holy_reveal_start += min(0.55, max(0.22, clip_dur * 0.12))
+            min_visible = min(0.80 if is_holy_final_word else 0.42, max(0.34 if is_holy_final_word else 0.20, clip_dur * (0.26 if is_holy_final_word else 0.14)))
+            latest_reveal_start = max(clip_start, clip_end - 0.12 - min_visible)
+            holy_reveal_start = min(holy_reveal_start, latest_reveal_start)
+            word_started = current_time >= holy_reveal_start
+            t = current_time - holy_reveal_start
+        else:
+            word_started = current_time >= w_start
+            t = current_time - w_start
         is_active = word_started
         is_current = use_hl and (w_start <= current_time <= w_end)
 
-        t = current_time - w_start
         current_scale = 1.0
         current_opacity = inactive_alpha
         current_translate_em = 0.0
@@ -1030,6 +1253,14 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
                 current_translate_x_em += spread * 0.18 * (1.0 - p)
                 current_scale *= 0.90 + 0.10 * p
                 current_filter_css = f"filter: blur({vw(4 * (1.0 - p))});"
+            elif anim_type == "holy_breath" and t >= 0:
+                p = ease_out_cubic(t / holy_speed)
+                breath = math.sin(max(0.0, current_time - clip_start) * 1.35 + holy_line_idx * 0.45)
+                final_weight = 1.0 if is_holy_final_word else 0.0
+                current_opacity = p
+                current_translate_em += (1.0 - p) * 0.22 - breath * (0.010 + final_weight * 0.004)
+                current_scale *= (0.965 + 0.035 * p) * (1.0 + breath * (0.010 + final_weight * 0.008))
+                current_filter_css = f"filter: blur({vw((10.0 + final_weight * 3.0) * (1.0 - p))});"
             elif anim_type == "word_wipe" and t >= 0:
                 word_reveal_pct = ease_out_cubic(t / pop_speed) * 100.0
         elif anim_type == "blur_fade":
@@ -1056,6 +1287,11 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
             current_translate_x_em += spread * 0.18
             current_scale *= 0.90
             current_filter_css = f"filter: blur({vw(4)});"
+        elif anim_type == "holy_breath":
+            current_opacity = 0.0
+            current_translate_em += 0.22
+            current_scale *= 0.965
+            current_filter_css = f"filter: blur({vw(13 if is_holy_final_word else 10)});"
         elif anim_type == "word_wipe":
             current_opacity = 1.0
             word_reveal_pct = 0.0
@@ -1090,6 +1326,14 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
             shadows.append(f"{vw(sh_x)} {vw(sh_y)} {vw(sh_blur)} rgba({sr}, {sg}, {sb}, {sh_a})")
         if is_current and hl_glow:
             shadows.extend([f"0 0 {vw(glow_size)} {c_hl}", f"0 0 {vw(glow_size*1.5)} {c_hl}", f"0 0 {vw(glow_size*2)} {c_hl}"])
+        if anim_type == "holy_breath" and is_holy_final_word and current_opacity > 0.02:
+            glow_hex = c_hl if use_hl else c_txt
+            gr, gg, gb = hex_to_rgb(glow_hex)
+            aura = min(1.0, max(0.0, current_opacity))
+            shadows.extend([
+                f"0 0 {vw(10)} rgba({gr}, {gg}, {gb}, {0.16 * aura:.2f})",
+                f"0 0 {vw(22)} rgba({gr}, {gg}, {gb}, {0.10 * aura:.2f})",
+            ])
 
         text_shadow_css = f"text-shadow: {', '.join(shadows)};" if shadows else "text-shadow: none;"
         
@@ -1113,7 +1357,11 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
             else:
                 word_margin_right = vw(max(0, word_spacing * 0.45 + 1.0))
         elif layout_mode == "reel_stack":
-            if idx in emphasis_idx:
+            if head_letter_large_variant and idx == first_content_idx:
+                layout_font_scale = 1.0
+                per_word_translate = -0.02
+                word_margin_right = vw(max(0, word_spacing * 0.28 + 0.7))
+            elif idx in emphasis_idx:
                 layout_font_scale = max(emphasis_scale / 100.0, 1.42 if layout_row_i == 0 else 1.62)
                 per_word_translate = -0.035 if layout_row_i == 0 else -0.055
                 word_margin_right = vw(max(0, word_spacing * 0.35 + 0.8))
@@ -1225,6 +1473,8 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
         )
 
         fill_color = c_hl if is_current else c_txt
+        if anim_type == "holy_breath" and is_holy_final_word and use_hl:
+            fill_color = c_hl
         texture_css = ""
         texture_profiles = {
             "grain": (0.28, 0.18, "0.014em", "0.010em", "0.24em 0.22em", "0.32em 0.27em", 0.12),
@@ -1272,6 +1522,18 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
             word_css_fg += f" background-color: rgba({hl_r}, {hl_g}, {hl_b}, {hl_bg_a}); border-radius: {hl_rad_vw}; box-shadow: 0 0 0 {hl_spread_vw} rgba({hl_r}, {hl_g}, {hl_b}, {hl_bg_a});"
 
         safe_txt = html.escape(clean_txt, quote=False)
+        if head_letter_large_variant and idx == first_content_idx:
+            initial_match = re.search(r"[A-Za-z0-9\u4e00-\u9fff]", clean_txt)
+            if initial_match:
+                initial_pos = initial_match.start()
+                initial_scale = max(emphasis_scale / 100.0, 1.58)
+                safe_txt = (
+                    f"{html.escape(clean_txt[:initial_pos], quote=False)}"
+                    f"<span style=\"display:inline-block; font-size:{initial_scale:.3f}em; "
+                    f"line-height:0.78; vertical-align:-0.04em; margin-right:0.018em;\">"
+                    f"{html.escape(clean_txt[initial_pos], quote=False)}</span>"
+                    f"{html.escape(clean_txt[initial_pos + 1:], quote=False)}"
+                )
         html_words_fg.append(f"<span style='{word_css_fg}'>{safe_txt}</span>")
         html_words_bg.append(f"<span style='{word_css_bg}'>{safe_txt}</span>")
 
@@ -1437,6 +1699,59 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
             </div>
         </div>
         """
+    elif bg_mode == "cinematic_frame":
+        cinema_float_y = math.sin(current_time * 0.82 + clip_start * 0.37) * 0.055
+        cinema_glow_p = 0.72 + 0.28 * math.sin(current_time * 1.05 + clip_start * 0.21)
+        glass_a = max(0.10, min(0.34, bg_a * 0.34))
+        veil_a = max(0.035, min(0.15, bg_a * 0.12))
+        edge_a = max(0.13, min(0.36, 0.17 + hl_bg_a * 0.13))
+        aura_a = max(0.09, min(0.26, 0.12 + bg_a * 0.10)) * cinema_glow_p
+        warm_a = max(0.08, min(0.22, 0.11 + bg_a * 0.08)) * cinema_glow_p
+        glass_radius_vw = vw(max(22, rad))
+        glass_inner_radius_vw = vw(max(18, max(22, rad) * 0.86))
+        glass_pad_top = vw(max(pad_top, pad / 2.0 + 8))
+        glass_pad_right = vw(max(pad_right, pad + 18))
+        glass_pad_bottom = vw(max(pad_bottom, pad / 2.0 + 9))
+        glass_pad_left = vw(max(pad_left, pad + 18))
+        frame_wrap_css = base_wrapper_css + f"""
+            display: inline-block;
+            position: relative;
+            isolation: isolate;
+            line-height: {max(0.8, float(lh))};
+            white-space: normal;
+            overflow-wrap: normal;
+            word-break: normal;
+            background:
+                radial-gradient(ellipse at 18% 0%, rgba(255, 244, 218, {warm_a:.3f}) 0%, transparent 58%),
+                radial-gradient(ellipse at 82% 100%, rgba(255, 205, 155, {veil_a:.3f}) 0%, transparent 62%),
+                linear-gradient(135deg, rgba(255, 255, 255, {glass_a + 0.055:.3f}) 0%, rgba({r}, {g}, {b}, {glass_a:.3f}) 48%, rgba(255, 230, 195, {veil_a:.3f}) 100%);
+            border: {vw(1.2)} solid rgba(255, 246, 224, {edge_a:.3f});
+            border-radius: {glass_radius_vw};
+            padding: {glass_pad_top} {glass_pad_right} {glass_pad_bottom} {glass_pad_left};
+            text-align: {align};
+            max-width: 100%;
+            box-sizing: border-box;
+            transform: translateY({cinema_float_y:.3f}em);
+            box-shadow:
+                0 0 {vw(16)} rgba(255, 229, 178, {edge_a * 0.42:.3f}),
+                0 {vw(12)} {vw(38)} rgba(24, 18, 10, {0.18 + bg_a * 0.10:.3f}),
+                0 0 {vw(48)} rgba(255, 214, 158, {aura_a:.3f}),
+                inset 0 0 {vw(22)} rgba(255, 255, 255, 0.115),
+                inset 0 {vw(1.2)} {vw(0.6)} rgba(255, 255, 255, 0.30);
+            -webkit-backdrop-filter: blur({vw(14)}) saturate(1.16);
+            backdrop-filter: blur({vw(14)}) saturate(1.16);
+        """
+        final_html = f"""
+        <div class='sub-box' style='{outer_box_style}'>
+            <div style="{inner_transform} width: 100%; display:flex; justify-content:{align_item}; text-align:{align};">
+                <div style="{frame_wrap_css}">
+                    <div style="position:absolute; inset:{vw(-5)}; z-index:-1; border-radius:inherit; pointer-events:none; background:radial-gradient(ellipse at 50% 50%, rgba(255, 230, 186, {aura_a:.3f}) 0%, rgba(255, 230, 186, {aura_a * 0.30:.3f}) 42%, transparent 72%); filter: blur({vw(18)}); opacity:{0.72 + cinema_glow_p * 0.18:.3f};"></div>
+                    <div style="position:absolute; inset:{vw(1.5)}; z-index:0; border-radius:{glass_inner_radius_vw}; pointer-events:none; background:linear-gradient(115deg, rgba(255,255,255,0.16), transparent 28%, transparent 68%, rgba(255,226,188,0.10));"></div>
+                    <div style="position:relative; z-index:1;">{inner_html_fg}</div>
+                </div>
+            </div>
+        </div>
+        """
     elif bg_mode == "sweep":
         bg_layer_css = base_wrapper_css + f"""
             display: inline;
@@ -1491,3 +1806,153 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
         """
 
     return final_html
+
+
+def render_signature_html(signature, current_time, proj_w=1080):
+    config = normalize_signature_config(signature)
+    text = str(config.get("text", "") or "").strip()
+    if not config.get("enabled") or not text:
+        return ""
+
+    style = default_signature_style(None, scale_from_subtitle=False)
+    if isinstance(config.get("style"), dict):
+        style.update(config.get("style", {}))
+    placement = str(config.get("placement", "top_right") or "top_right")
+    margin_x = max(0.0, min(45.0, float(config.get("margin_x", 5.0) or 0.0)))
+    margin_y = max(0.0, min(45.0, float(config.get("margin_y", 4.0) or 0.0)))
+    pos_x = max(-100.0, min(100.0, float(config.get("pos_x", 0.0) or 0.0)))
+    pos_y = max(-100.0, min(100.0, float(config.get("pos_y", -42.0) or 0.0)))
+
+    align = str(style.get("text_align", "center") or "center") if placement == "custom" else "right" if "right" in placement else "left" if "left" in placement else "center"
+    style["text_align"] = align
+    style["anim_type"] = "none"
+    style["font_motion"] = "none"
+    style["use_hl"] = False
+
+    end_time = max(float(current_time or 0.0) + 1.0, 1.0)
+    sig_sub = {
+        "text": text,
+        "start": 0.0,
+        "end": end_time,
+        "words": [{"text": text, "start": 0.0, "end": end_time}],
+        "style": style,
+    }
+    inner_html = render_subtitle_html(sig_sub, current_time, proj_w)
+
+    if placement == "top_left":
+        pos_css = f"left:{margin_x:.3f}%; top:{margin_y:.3f}%; text-align:left;"
+    elif placement == "bottom_right":
+        pos_css = f"right:{margin_x:.3f}%; bottom:{margin_y:.3f}%; text-align:right;"
+    elif placement == "bottom_left":
+        pos_css = f"left:{margin_x:.3f}%; bottom:{margin_y:.3f}%; text-align:left;"
+    elif placement == "top_center":
+        pos_css = f"left:50%; top:{margin_y:.3f}%; transform:translateX(-50%); text-align:center;"
+    elif placement == "bottom_center":
+        pos_css = f"left:50%; bottom:{margin_y:.3f}%; transform:translateX(-50%); text-align:center;"
+    elif placement == "custom":
+        pos_css = f"left:calc(50% + {pos_x:.3f}%); top:calc(50% + {pos_y:.3f}%); transform:translate(-50%, -50%); text-align:{align};"
+    else:
+        pos_css = f"right:{margin_x:.3f}%; top:{margin_y:.3f}%; text-align:right;"
+
+    return f"""
+    <div class="signature-overlay" style="position:absolute; {pos_css} z-index:90; max-width:72%; pointer-events:none; box-sizing:border-box;">
+        {inner_html}
+    </div>
+    """
+
+
+def render_design_html(design_state, current_time, proj_w=1080, proj_h=1920):
+    state = normalize_design_room_state(design_state)
+    pages = state.get("pages", [])
+    if not pages:
+        return ""
+
+    t = max(0.0, float(current_time or 0.0))
+    cursor = 0.0
+    active_page = None
+    page_local_time = 0.0
+    for page in pages:
+        dur = max(0.1, float(page.get("duration", 5.0) or 5.0))
+        if cursor <= t < cursor + dur:
+            active_page = page
+            page_local_time = t - cursor
+            break
+        cursor += dur
+    if active_page is None:
+        return ""
+
+    design_w = max(1.0, float(state.get("width", proj_w) or proj_w))
+    design_h = max(1.0, float(state.get("height", proj_h) or proj_h))
+
+    layer_html = []
+    layers = sorted(
+        active_page.get("layers", []) or [],
+        key=lambda item: int(item.get("zIndex", 0) or 0)
+    )
+    page_dur = max(0.1, float(active_page.get("duration", 5.0) or 5.0))
+    for layer in layers:
+        start = max(0.0, float(layer.get("start", 0.0) or 0.0))
+        end = float(layer.get("end", 0.0) or 0.0)
+        if end <= 0:
+            end = page_dur
+        if not (start <= page_local_time < end):
+            continue
+
+        x_pct = float(layer.get("x", 0) or 0) * 100.0 / design_w
+        y_pct = float(layer.get("y", 0) or 0) * 100.0 / design_h
+        w_pct = max(0.01, float(layer.get("width", 1) or 1) * 100.0 / design_w)
+        h_pct = max(0.01, float(layer.get("height", 1) or 1) * 100.0 / design_h)
+        opacity = max(0.0, min(1.0, float(layer.get("opacity", 1) or 0)))
+        rot = float(layer.get("rotation", 0) or 0)
+        common = (
+            f"position:absolute; left:{x_pct:.5f}%; top:{y_pct:.5f}%; "
+            f"width:{w_pct:.5f}%; min-height:{h_pct:.5f}%; opacity:{opacity:.3f}; "
+            f"transform:rotate({rot:.3f}deg); transform-origin:center center; "
+            f"box-sizing:border-box; pointer-events:none;"
+        )
+        if layer.get("type") == "rect":
+            fill = html.escape(str(layer.get("fill", "#000000") or "#000000"), quote=True)
+            radius = float(layer.get("cornerRadius", 0) or 0) * 100.0 / design_w
+            layer_html.append(
+                f"<div style='{common} height:{h_pct:.5f}%; background:{fill}; border-radius:{radius:.5f}vw;'></div>"
+            )
+            continue
+        if layer.get("type") == "image":
+            src = html.escape(str(layer.get("src", "") or "").strip(), quote=True)
+            if not src:
+                continue
+            fit = str(layer.get("fit", "cover") or "cover").strip().lower()
+            object_fit = "fill" if fit == "stretch" else ("contain" if fit == "contain" else "cover")
+            layer_html.append(
+                f"<img src='{src}' style='{common} height:{h_pct:.5f}%; object-fit:{object_fit}; display:block;' />"
+            )
+            continue
+
+        text = html.escape(str(layer.get("text", "") or ""), quote=False).replace("\n", "<br>")
+        if not text:
+            continue
+        font_size = float(layer.get("fontSize", 48) or 48) * 100.0 / design_w
+        family = html.escape(str(layer.get("fontFamily", "Noto Sans SC") or "Noto Sans SC"), quote=True)
+        weight = html.escape(str(layer.get("fontWeight", "700") or "700"), quote=True)
+        fill = html.escape(str(layer.get("fill", "#FFFFFF") or "#FFFFFF"), quote=True)
+        align = html.escape(str(layer.get("align", "center") or "center"), quote=True)
+        line_height = max(0.8, min(2.4, float(layer.get("lineHeight", 1.18) or 1.18)))
+        bg = str(layer.get("background", "") or "").strip()
+        bg_css = ""
+        if bg:
+            bg_css = f"background:{html.escape(bg, quote=True)}; border-radius:0.55vw; padding:0.5vw 0.85vw;"
+        shadow_css = "text-shadow:0 0 0.45vw rgba(0,0,0,0.62), 0 0.28vw 0.85vw rgba(0,0,0,0.38);" if layer.get("shadow", True) else "text-shadow:none;"
+        layer_html.append(
+            f"<div style='{common} color:{fill}; font-family:\"{family}\", sans-serif; "
+            f"font-size:{font_size:.5f}vw; font-weight:{weight}; line-height:{line_height}; "
+            f"text-align:{align}; white-space:pre-wrap; overflow:hidden; {shadow_css} {bg_css}'>{text}</div>"
+        )
+
+    if not layer_html:
+        return ""
+    return (
+        "<div class='design-overlay' style='position:absolute; inset:0; z-index:2; "
+        "pointer-events:none; overflow:hidden; box-sizing:border-box;'>"
+        + "\n".join(layer_html)
+        + "</div>"
+    )

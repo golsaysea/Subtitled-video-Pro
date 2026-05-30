@@ -12,8 +12,10 @@ import subprocess
 import zipfile
 import sys
 import copy
+import time
+import html
 
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
+from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                              QLabel, QTextEdit, QScrollArea, QTabWidget, QComboBox, 
                              QSlider, QFileDialog, QGridLayout, QFrame, 
                              QCheckBox, QMessageBox, QColorDialog, QFontComboBox, 
@@ -22,21 +24,26 @@ from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEngineSettings
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput, QVideoSink, QVideoFrame
 from PyQt6.QtCore import Qt, QUrl, QTimer, pyqtSlot, pyqtSignal, QLocale, QEvent, QObject, QSize
-from PyQt6.QtGui import QPainter, QPixmap, QKeySequence, QShortcut, QIcon, QFontDatabase
+from PyQt6.QtGui import QPainter, QPixmap, QKeySequence, QShortcut, QIcon, QFontDatabase, QPen
 from PyQt6.QtWebChannel import QWebChannel
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtCore import QRectF
 
-from timeline_engine import TimelineHeader, AdvancedTimeline, TRACK_H, HEADER_H
+from timeline_engine import TimelineHeader, AdvancedTimeline, TRACK_H, HEADER_H, TRACK_COUNT
 from core import get_ffmpeg_cmd, get_ffprobe_cmd, get_app_dir, FFMPEG_DOWNLOAD_URL, download_file_with_progress
 from app_theme import apply_tinted_styles
 from ui_components import (hex_to_rgb, get_exact_duration, get_video_dimensions,
-                           AspectRatioContainer, render_subtitle_html,
+                           AspectRatioContainer, default_signature_config,
+                           default_design_room_state, normalize_design_room_state,
+                           normalize_signature_config, render_design_html, render_signature_html,
+                           render_subtitle_html,
                            rebalance_subtitle_layout, tokenize_display_text,
                            normalize_word_timestamps, align_reference_text_to_timestamps,
                            FAITH_WORDS)
-from project_io import copy_media_to_project_assets, sync_project_assets_to_project_dir, update_room_state
+from project_io import copy_media_to_project_assets, load_project, save_project, sync_project_assets_to_project_dir, update_room_state
+from app_config import OUTPUT_RESOLUTION_OPTIONS, get_output_resolution, resolution_to_size
 from font_assets import font_face_css
+from render_timing import render_tail_padding_seconds
 from font_registry import (
     STATUS_NONCOMMERCIAL,
     STATUS_OPEN,
@@ -50,6 +57,33 @@ from font_registry import (
 
 CACHE_FILE = os.path.join(tempfile.gettempdir(), "sh_v8_project_cache.json")
 PRESETS_FILE = os.path.join(os.getcwd(), "style_presets.json") 
+SIGNATURE_PRESETS_FILE = os.path.join(os.getcwd(), "signature_presets.json")
+STYLE_PRESET_POSITION_KEY = "__position__"
+
+def split_style_preset(raw):
+    if not isinstance(raw, dict):
+        return {}, None
+    if isinstance(raw.get("style"), dict):
+        style = copy.deepcopy(raw.get("style") or {})
+        position = raw.get("position") or raw.get(STYLE_PRESET_POSITION_KEY)
+    else:
+        style = {
+            k: copy.deepcopy(v)
+            for k, v in raw.items()
+            if k not in (STYLE_PRESET_POSITION_KEY, "position")
+        }
+        position = raw.get(STYLE_PRESET_POSITION_KEY) or raw.get("position")
+    if isinstance(position, dict):
+        try:
+            position = {
+                "pos_x": float(position.get("pos_x", 0.0)),
+                "pos_y": float(position.get("pos_y", 25.0)),
+            }
+        except Exception:
+            position = None
+    else:
+        position = None
+    return style, position
 
 def local_get_cf_accounts():
     config_path = os.path.join(os.getcwd(), "settings.json")
@@ -170,13 +204,187 @@ class CollapsibleBox(QWidget):
     def addLayout(self, layout):
         self.content_layout.addLayout(layout)       
 
+class PreviewWorkspace(QFrame):
+    def __init__(self, child_widget, controller=None, parent=None):
+        super().__init__(parent)
+        self.child_widget = child_widget
+        self.controller = controller
+        self.ratio = 1080 / 1920
+        self.view_zoom = 1.0
+        self.view_pan_x = 0.0
+        self.view_pan_y = 0.0
+        self._is_panning = False
+        self._last_pan_pos = None
+        self.child_widget.setParent(self)
+        self.child_widget.show()
+        self.setMouseTracking(True)
+        self.setAcceptDrops(True)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setCursor(Qt.CursorShape.OpenHandCursor)
+        self.setMinimumSize(260, 260)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.setStyleSheet("QFrame { background-color: #07080d; border: 1px solid #171b28; border-radius: 6px; }")
+
+    def set_ratio(self, w, h):
+        if h == 0:
+            return
+        self.ratio = max(0.05, float(w) / float(h))
+        self.update_stage_geometry()
+
+    def set_view_transform(self, zoom, pan_x, pan_y):
+        self.view_zoom = max(0.25, float(zoom or 1.0))
+        self.view_pan_x = float(pan_x or 0.0)
+        self.view_pan_y = float(pan_y or 0.0)
+        self.update_stage_geometry()
+        self.update()
+
+    def base_stage_size(self):
+        margin = 42 if self.width() >= 620 and self.height() >= 420 else 24
+        avail_w = max(80, self.width() - margin * 2)
+        avail_h = max(80, self.height() - margin * 2)
+        if avail_w / avail_h > self.ratio:
+            base_h = avail_h
+            base_w = base_h * self.ratio
+        else:
+            base_w = avail_w
+            base_h = base_w / self.ratio
+        return max(64, int(base_w)), max(64, int(base_h))
+
+    def stage_size_for_zoom(self, zoom=None):
+        base_w, base_h = self.base_stage_size()
+        z = max(0.25, float(self.view_zoom if zoom is None else zoom))
+        return max(64, int(base_w * z)), max(64, int(base_h * z))
+
+    def update_stage_geometry(self):
+        if not self.child_widget:
+            return
+        stage_w, stage_h = self.stage_size_for_zoom()
+        x = int((self.width() - stage_w) * 0.5 + self.view_pan_x)
+        y = int((self.height() - stage_h) * 0.5 + self.view_pan_y)
+        self.child_widget.setGeometry(x, y, stage_w, stage_h)
+        self.child_widget.raise_()
+
+    def resizeEvent(self, event):
+        self.update_stage_geometry()
+        if self.controller:
+            QTimer.singleShot(0, self.controller.refresh_preview_layout)
+        super().resizeEvent(event)
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.fillRect(self.rect(), QColor("#07080d"))
+        grid_color = QColor("#171b28")
+        grid_color.setAlpha(95)
+        painter.setPen(QPen(grid_color, 1))
+        step = 32
+        ox = int((self.width() * 0.5 + self.view_pan_x) % step)
+        oy = int((self.height() * 0.5 + self.view_pan_y) % step)
+        for x in range(ox, self.width(), step):
+            painter.drawLine(x, 0, x, self.height())
+        for y in range(oy, self.height(), step):
+            painter.drawLine(0, y, self.width(), y)
+        if self.child_widget:
+            g = self.child_widget.geometry()
+            shadow = QColor("#000000")
+            shadow.setAlpha(120)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(shadow)
+            painter.drawRoundedRect(QRectF(g).adjusted(-14, -12, 14, 16), 8, 8)
+        painter.end()
+
+    def wheelEvent(self, event):
+        delta = event.angleDelta().y()
+        if not delta or not self.controller:
+            event.ignore()
+            return
+        pos = event.position()
+        self.controller.adjust_preview_zoom(1 if delta > 0 else -1, pos.x(), pos.y())
+        event.accept()
+
+    def mousePressEvent(self, event):
+        if event.button() in (Qt.MouseButton.LeftButton, Qt.MouseButton.MiddleButton):
+            if self.controller:
+                self.controller.show_canvas_context_toolbar("canvas")
+            self._is_panning = True
+            self._last_pan_pos = event.position()
+            self.setCursor(Qt.CursorShape.ClosedHandCursor)
+            self.setFocus()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._is_panning and self._last_pan_pos is not None and self.controller:
+            pos = event.position()
+            dx = pos.x() - self._last_pan_pos.x()
+            dy = pos.y() - self._last_pan_pos.y()
+            self._last_pan_pos = pos
+            self.controller.pan_preview_view(dx, dy)
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if self._is_panning and event.button() in (Qt.MouseButton.LeftButton, Qt.MouseButton.MiddleButton):
+            self._is_panning = False
+            self._last_pan_pos = None
+            self.setCursor(Qt.CursorShape.OpenHandCursor)
+            if self.controller:
+                self.controller.finalize_preview_pan()
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        if self.controller:
+            self.controller.reset_preview_view()
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
+
+    def dragEnterEvent(self, event):
+        if self.controller:
+            self.controller.dragEnterEvent(event)
+            return
+        super().dragEnterEvent(event)
+
+    def dropEvent(self, event):
+        if self.controller:
+            self.controller.dropEvent(event)
+            return
+        super().dropEvent(event)
+
 class WebBridge(QObject):
     def __init__(self, parent_controller):
         super().__init__()
         self.controller = parent_controller
+
+    @pyqtSlot(float, float, float)
+    def adjust_monitor_zoom(self, delta_y, anchor_x=0.0, anchor_y=0.0):
+        self.controller.adjust_preview_zoom_from_stage(-1 if delta_y > 0 else 1, anchor_x, anchor_y)
+
+    @pyqtSlot(float, float)
+    def pan_monitor_view(self, dx, dy):
+        self.controller.pan_preview_view(dx, dy)
+
+    @pyqtSlot()
+    def reset_monitor_view(self):
+        self.controller.reset_preview_view()
+
+    @pyqtSlot()
+    def finalize_monitor_pan(self):
+        self.controller.finalize_preview_pan()
+
+    @pyqtSlot()
+    def show_context_toolbar(self):
+        self.controller.show_canvas_context_toolbar("canvas")
         
     @pyqtSlot(int, float, float)
     def update_coordinates(self, idx, x, y):
+        if not getattr(self.controller, "edit_mode", False):
+            return
         if 0 <= idx < len(self.controller.state["subs_data"]):
             current_clip = self.controller.state["subs_data"][idx]
             scope = self.controller.style_scope_combo.currentIndex()
@@ -203,6 +411,8 @@ class WebBridge(QObject):
             
     @pyqtSlot(int, float)
     def update_box_width(self, idx, width):
+        if not getattr(self.controller, "edit_mode", False):
+            return
         if 0 <= idx < len(self.controller.state["subs_data"]):
             current_clip = self.controller.state["subs_data"][idx]
             scope = self.controller.style_scope_combo.currentIndex()
@@ -226,16 +436,23 @@ class WebBridge(QObject):
     @pyqtSlot(int)
     def notify_selected(self, idx): 
         self.controller.current_selected_idx = idx
+        self.controller.show_canvas_context_toolbar("subtitle")
         self.controller.switch_inspector("sub")
+        self.controller.last_render_hash = None
+        self.controller.update_floating_subtitle()
         
     @pyqtSlot(int, str)
     def update_text_from_screen(self, idx, new_text):
+        if not getattr(self.controller, "edit_mode", False):
+            return
         if 0 <= idx < len(self.controller.state["subs_data"]):
             self.controller.sync_text_edit(idx, new_text)
             self.controller.push_history()
             
     @pyqtSlot(int, int)
     def adjust_font_size(self, idx, delta):
+        if not getattr(self.controller, "edit_mode", False):
+            return
         if 0 <= idx < len(self.controller.state["subs_data"]):
             current_clip = self.controller.state["subs_data"][idx]
             st = current_clip.get("style", current_clip)
@@ -292,20 +509,27 @@ class EditView(QWidget):
             "hl_pad_left": 8, "hl_pad_right": 8, "hl_pad_top": 2, "hl_pad_bottom": 2
         }
         self.state = {
-            "video_clips": [], "audio_path": "", "subs_data": [], "a_trim": [0.0, 10.0], "duration": 10.0,
-            "resolution": "原画检测 (自动跟随)", "v_scale": 100, "v_volume": 100, "a_volume": 100,
+            "video_clips": [], "audio_path": "", "music_path": "", "subs_data": [], "a_trim": [0.0, 10.0], "duration": 10.0,
+            "resolution": get_output_resolution(), "v_scale": 100, "v_volume": 100, "a_volume": 100, "music_volume": 35,
             "chunk_mode": "双行大段 (约10字，智能折行)",
             "timing_mode": "J Cut (字幕稍后收尾)",
             "fill_subtitle_gaps": True,
             "custom_text": "", # 👑 新增：用于保存用户文案到工程
             "default_pos_x": 0.0,
             "default_pos_y": 25.0,
-            "default_style": self.default_style.copy()
+            "default_style": self.default_style.copy(),
+            "signature": default_signature_config(self.default_style)
         }
         self.current_selected_idx = -1; self.current_v_idx = 0; self.current_play_time = 0.0     
         self.is_playing = False; self.ui_entries = []; self.selected_track = "empty" 
-        self.zoom_factor = 50.0; self.active_subs_cache = set(); self.last_render_hash = None
-        self.v_wave_pixmap = None; self.a_wave_pixmap = None; self.video_thumbs = [] 
+        self.workspace_mode = "edit"
+        self.selected_design_layer_id = ""
+        self.edit_mode = True
+        self._video_exts = (".mp4", ".mov", ".webm", ".mkv", ".avi")
+        self._audio_exts = (".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg")
+        self.zoom_factor = 50.0; self.timeline_snap_enabled = True; self.active_subs_cache = set(); self.last_render_hash = None
+        self.preview_zoom = 1.0; self.preview_pan_x = 0.0; self.preview_pan_y = 0.0
+        self.v_wave_pixmap = None; self.a_wave_pixmap = None; self.video_thumbs = []; self.last_video_image = None
         self.proj_width = 1080; self.proj_height = 1920
         self.safe_font_only = True
         self.project_autosave_timer = QTimer(self)
@@ -323,26 +547,618 @@ class EditView(QWidget):
         self.eng_locale = QLocale(QLocale.Language.English, QLocale.Country.UnitedStates)
         self.init_ui()
 
+    def _project_display_name(self):
+        if isinstance(self.project_data, dict):
+            return (
+                self.project_data.get("project_name")
+                or os.path.splitext(os.path.basename(self.project_data.get("project_path", "")))[0]
+                or "未命名工程"
+            )
+        return "未命名工程"
+
+    def _make_design_spin(self, min_v, max_v, step):
+        spin = QSpinBox()
+        spin.setRange(int(min_v), int(max_v))
+        spin.setSingleStep(int(step))
+        spin.setFixedHeight(27)
+        spin.setStyleSheet("background:#10131b; color:#edf2f7; border:1px solid #31384d; border-radius:5px;")
+        spin.valueChanged.connect(self._on_design_property_change)
+        return spin
+
+    def _make_design_double_spin(self, min_v, max_v, step, suffix=""):
+        spin = QDoubleSpinBox()
+        spin.setRange(float(min_v), float(max_v))
+        spin.setSingleStep(float(step))
+        spin.setDecimals(2 if step < 0.1 else 1)
+        if suffix:
+            spin.setSuffix(suffix)
+        spin.setFixedHeight(27)
+        spin.setStyleSheet("background:#10131b; color:#edf2f7; border:1px solid #31384d; border-radius:5px;")
+        spin.valueChanged.connect(self._on_design_property_change)
+        return spin
+
+    def _design_is_legacy_default(self, design_state):
+        state = normalize_design_room_state(design_state)
+        pages = state.get("pages", [])
+        layers = pages[0].get("layers", []) if pages else []
+        if len(layers) == 2:
+            ids = {str(layer.get("id", "")) for layer in layers}
+            texts = {str(layer.get("text", "")) for layer in layers}
+            if ids == {"title-1", "body-1"} and {"Prayer Title", "Write your prayer words here."}.issubset(texts):
+                return True
+        return False
+
+    def _blank_design_state_if_legacy_default(self, design_state):
+        state = normalize_design_room_state(design_state)
+        if self._design_is_legacy_default(state):
+            return default_design_room_state()
+        return state
+
+    def ensure_design_default_is_blank(self):
+        project_data = self._design_project_data()
+        room_state = project_data.get("room_state", {}).get("design_room", {}) if isinstance(project_data, dict) else {}
+        if room_state and self._design_is_legacy_default(room_state):
+            self.selected_design_layer_id = ""
+            self._commit_design_state(default_design_room_state(), sync_controls=False)
+
+    def _design_project_data(self):
+        parent = self.parent_window()
+        project_data = getattr(parent, "project", None) if parent else None
+        return project_data or self.project_data or {"project_type": "edit_room"}
+
+    def _current_design_state(self):
+        project_data = self._design_project_data()
+        room_state = project_data.get("room_state", {}).get("design_room", {}) if isinstance(project_data, dict) else {}
+        return self._blank_design_state_if_legacy_default(room_state)
+
+    def _design_page(self, state=None):
+        state = state or self._current_design_state()
+        pages = state.setdefault("pages", [])
+        if not pages:
+            pages.append(default_design_room_state()["pages"][0])
+        return pages[0]
+
+    def _design_next_z(self, page):
+        return max([int(float(layer.get("zIndex", 0) or 0)) for layer in page.get("layers", [])] + [-1]) + 1
+
+    def _design_text_layer(self, page, **kwargs):
+        layer = {
+            "id": f"design-text-{int(time.time() * 1000)}",
+            "type": "text",
+            "name": "文字",
+            "text": "Text",
+            "x": 120,
+            "y": 420,
+            "width": 840,
+            "height": 180,
+            "fontSize": 54,
+            "fontFamily": "Noto Sans SC",
+            "fontWeight": "700",
+            "fill": "#FFFFFF",
+            "align": "center",
+            "rotation": 0,
+            "opacity": 1.0,
+            "start": 0.0,
+            "end": 0.0,
+            "timelineTrack": 6,
+            "zIndex": self._design_next_z(page),
+            "shadow": True,
+        }
+        layer.update(kwargs)
+        return layer
+
+    def _design_rect_layer(self, page, **kwargs):
+        layer = {
+            "id": f"design-rect-{int(time.time() * 1000)}",
+            "type": "rect",
+            "name": "色块",
+            "x": 150,
+            "y": 780,
+            "width": 780,
+            "height": 180,
+            "fill": "#111827",
+            "opacity": 0.62,
+            "cornerRadius": 30,
+            "rotation": 0,
+            "start": 0.0,
+            "end": 0.0,
+            "timelineTrack": 6,
+            "zIndex": self._design_next_z(page),
+        }
+        layer.update(kwargs)
+        return layer
+
+    def _commit_design_state(self, design_state, status_text="", sync_controls=True, sync_timeline=True):
+        design_state = normalize_design_room_state(design_state)
+        parent = self.parent_window()
+        project_data = self._design_project_data()
+        try:
+            project_data = update_room_state(project_data, "design_room", design_state)
+        except Exception:
+            project_data.setdefault("room_state", {})["design_room"] = copy.deepcopy(design_state)
+        self.project_data = project_data
+        if parent and hasattr(parent, "project"):
+            parent.project = project_data
+        if sync_controls:
+            self.sync_design_panel_controls()
+        elif hasattr(self, "design_layer_combo"):
+            idx = self.design_layer_combo.findData(self.selected_design_layer_id)
+            layer = self._selected_design_layer(design_state)
+            if idx >= 0 and layer:
+                prefix = "T" if layer.get("type") == "text" else "□" if layer.get("type") == "rect" else "图"
+                self.design_layer_combo.setItemText(idx, f"{prefix} {layer.get('name', '图层')}")
+        self.last_render_hash = None
+        self.update_floating_subtitle()
+        if sync_timeline and hasattr(self, "timeline_widget"):
+            self.timeline_widget.sync_from_controller()
+        self._update_workspace_status()
+        if status_text and hasattr(self, "status_lbl"):
+            self.status_lbl.setText(status_text)
+
+    def add_design_component(self, kind):
+        state = self._current_design_state()
+        page = self._design_page(state)
+        page["duration"] = max(float(page.get("duration", 5.0) or 5.0), float(self.state.get("duration", 5.0) or 5.0))
+        layers = page.setdefault("layers", [])
+        new_layers = []
+        if kind == "title":
+            new_layers.append(self._design_text_layer(page, name="标题", text="Title", x=96, y=230, width=888, height=130, fontSize=82, fontWeight="800"))
+        elif kind == "body":
+            new_layers.append(self._design_text_layer(page, name="正文", text="Body text", x=120, y=430, width=840, height=300, fontSize=48, fontWeight="600"))
+        elif kind == "prayer":
+            new_layers.append(self._design_text_layer(page, name="祷告词", text="Lord, guide my heart today.", x=120, y=820, width=840, height=320, fontSize=48, fontWeight="600", fill="#FFF7E8"))
+        elif kind == "rect":
+            new_layers.append(self._design_rect_layer(page, name="色块"))
+        elif kind == "highlight":
+            new_layers.append(self._design_rect_layer(page, name="强调条", x=155, y=720, width=770, height=92, fill="#4EA3FF", opacity=0.72, cornerRadius=26))
+        elif kind == "divider":
+            new_layers.append(self._design_rect_layer(page, name="分隔线", x=240, y=950, width=600, height=8, fill="#6EE7B7", opacity=0.9, cornerRadius=6))
+        elif kind == "lower":
+            base_z = self._design_next_z(page)
+            new_layers.append(self._design_rect_layer(page, id=f"design-lower-bg-{int(time.time() * 1000)}", name="下栏底板", x=92, y=1400, width=896, height=160, fill="#111827", opacity=0.74, cornerRadius=28, zIndex=base_z))
+            new_layers.append(self._design_text_layer(page, name="下栏文字", text="Lower third title", x=140, y=1438, width=800, height=80, fontSize=44, fontWeight="800", zIndex=base_z + 1))
+        elif kind == "quote":
+            base_z = self._design_next_z(page)
+            new_layers.append(self._design_rect_layer(page, id=f"design-quote-bg-{int(time.time() * 1000)}", name="引用卡片", x=112, y=520, width=856, height=560, fill="#20232A", opacity=0.86, cornerRadius=34, zIndex=base_z))
+            new_layers.append(self._design_text_layer(page, name="引用文字", text="Peace begins with a quiet heart.", x=165, y=680, width=750, height=260, fontSize=54, fontWeight="700", fill="#FFF7E8", zIndex=base_z + 1))
+        if not new_layers:
+            return
+        layers.extend(new_layers)
+        self.selected_design_layer_id = new_layers[-1]["id"]
+        self.selected_track = "design"
+        self._commit_design_state(state, "🎨 已添加设计组件。")
+
+    def add_design_image_dialog(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择图片素材",
+            "",
+            "Image Files (*.png *.jpg *.jpeg *.webp *.bmp);;All Files (*)",
+        )
+        if not file_path:
+            return
+        project_data = self._design_project_data()
+        try:
+            file_path, _, _ = copy_media_to_project_assets(project_data, file_path)
+        except Exception:
+            pass
+        state = self._current_design_state()
+        page = self._design_page(state)
+        page["duration"] = max(float(page.get("duration", 5.0) or 5.0), float(self.state.get("duration", 5.0) or 5.0))
+        layer = {
+            "id": f"design-image-{int(time.time() * 1000)}",
+            "type": "image",
+            "name": os.path.splitext(os.path.basename(file_path))[0] or "图片素材",
+            "src": QUrl.fromLocalFile(file_path).toString(),
+            "path": file_path,
+            "fit": "cover",
+            "x": 140,
+            "y": 520,
+            "width": 800,
+            "height": 520,
+            "opacity": 1.0,
+            "rotation": 0,
+            "start": 0.0,
+            "end": 0.0,
+            "timelineTrack": 6,
+            "zIndex": self._design_next_z(page),
+        }
+        page.setdefault("layers", []).append(layer)
+        self.selected_design_layer_id = layer["id"]
+        self.selected_track = "design"
+        self._commit_design_state(state, "🖼️ 已添加图片设计层。")
+
+    def _selected_design_layer(self, state=None):
+        state = state or self._current_design_state()
+        page = self._design_page(state)
+        layers = page.get("layers", [])
+        layer = next((item for item in layers if item.get("id") == self.selected_design_layer_id), None)
+        if layer is None and layers:
+            layer = sorted(layers, key=lambda item: int(float(item.get("zIndex", 0) or 0)))[-1]
+            self.selected_design_layer_id = layer.get("id", "")
+        return layer
+
+    def sync_design_panel_controls(self):
+        if not hasattr(self, "design_layer_combo"):
+            return
+        if not getattr(self, "_design_ensuring_blank", False):
+            project_data = self._design_project_data()
+            room_state = project_data.get("room_state", {}).get("design_room", {}) if isinstance(project_data, dict) else {}
+            if room_state and self._design_is_legacy_default(room_state):
+                self._design_ensuring_blank = True
+                try:
+                    self.selected_design_layer_id = ""
+                    self._commit_design_state(default_design_room_state(), sync_controls=False)
+                finally:
+                    self._design_ensuring_blank = False
+        state = self._current_design_state()
+        page = self._design_page(state)
+        layers = sorted(page.get("layers", []), key=lambda item: int(float(item.get("zIndex", 0) or 0)), reverse=True)
+        selected_id = self.selected_design_layer_id
+        self.design_layer_combo.blockSignals(True)
+        self.design_layer_combo.clear()
+        if not layers:
+            self.design_layer_combo.addItem("无设计图层", "")
+        else:
+            for layer in layers:
+                prefix = "T" if layer.get("type") == "text" else "□" if layer.get("type") == "rect" else "图"
+                self.design_layer_combo.addItem(f"{prefix} {layer.get('name', '图层')}", layer.get("id", ""))
+            idx = max(0, self.design_layer_combo.findData(selected_id))
+            self.design_layer_combo.setCurrentIndex(idx)
+            self.selected_design_layer_id = self.design_layer_combo.currentData() or ""
+        self.design_layer_combo.blockSignals(False)
+
+        self.design_page_duration_spin.blockSignals(True)
+        self.design_page_duration_spin.setValue(float(page.get("duration", 5.0) or 5.0))
+        self.design_page_duration_spin.blockSignals(False)
+
+        layer = self._selected_design_layer(state)
+        widgets = [
+            self.design_layer_name, self.design_text_input, self.design_x_spin, self.design_y_spin,
+            self.design_w_spin, self.design_h_spin, self.design_start_spin, self.design_end_spin,
+            self.design_size_spin, self.design_opacity_spin, self.design_align_combo,
+        ]
+        for widget in widgets:
+            widget.blockSignals(True)
+        try:
+            has_layer = layer is not None
+            self.design_layer_name.setEnabled(has_layer)
+            self.design_text_input.setEnabled(has_layer and layer.get("type") == "text")
+            self.design_size_spin.setEnabled(has_layer and layer.get("type") == "text")
+            self.design_align_combo.setEnabled(has_layer and layer.get("type") == "text")
+            for widget in [self.design_x_spin, self.design_y_spin, self.design_w_spin, self.design_h_spin, self.design_start_spin, self.design_end_spin, self.design_opacity_spin, self.btn_design_color]:
+                widget.setEnabled(has_layer)
+            self.design_layer_name.setText(str(layer.get("name", "")) if has_layer else "")
+            self.design_text_input.setPlainText(str(layer.get("text", "")) if has_layer and layer.get("type") == "text" else "")
+            self.design_x_spin.setValue(int(float(layer.get("x", 0) or 0)) if has_layer else 0)
+            self.design_y_spin.setValue(int(float(layer.get("y", 0) or 0)) if has_layer else 0)
+            self.design_w_spin.setValue(int(float(layer.get("width", 1) or 1)) if has_layer else 1)
+            self.design_h_spin.setValue(int(float(layer.get("height", 1) or 1)) if has_layer else 1)
+            self.design_start_spin.setValue(float(layer.get("start", 0.0) or 0.0) if has_layer else 0.0)
+            self.design_end_spin.setValue(float(layer.get("end", 0.0) or 0.0) if has_layer else 0.0)
+            self.design_size_spin.setValue(int(float(layer.get("fontSize", 48) or 48)) if has_layer else 48)
+            self.design_opacity_spin.setValue(float(layer.get("opacity", 1.0) or 0.0) if has_layer else 1.0)
+            self.design_align_combo.setCurrentText(str(layer.get("align", "center") or "center") if has_layer else "center")
+            color = str(layer.get("fill", "#FFFFFF") if has_layer else "#FFFFFF")
+            self.btn_design_color.setStyleSheet(f"background-color:{color}; color:#ffffff; border:1px solid #454f6d; border-radius:6px; font-weight:800;")
+        finally:
+            for widget in widgets:
+                widget.blockSignals(False)
+
+    def _on_design_layer_combo_changed(self, index):
+        if not hasattr(self, "design_layer_combo"):
+            return
+        self.selected_design_layer_id = self.design_layer_combo.currentData() or ""
+        if self.selected_design_layer_id:
+            self.selected_track = "design"
+        self.sync_design_panel_controls()
+
+    def _on_design_page_duration_change(self, value):
+        state = self._current_design_state()
+        page = self._design_page(state)
+        page["duration"] = max(0.1, float(value or 5.0))
+        self._commit_design_state(state, sync_controls=False)
+
+    def _on_design_property_change(self, *args):
+        if not hasattr(self, "design_layer_combo"):
+            return
+        state = self._current_design_state()
+        layer = self._selected_design_layer(state)
+        if not layer:
+            return
+        layer["name"] = self.design_layer_name.text().strip() or layer.get("name", "图层")
+        if layer.get("type") == "text":
+            layer["text"] = self.design_text_input.toPlainText()
+            layer["fontSize"] = int(self.design_size_spin.value())
+            layer["align"] = self.design_align_combo.currentText() or "center"
+        layer["x"] = int(self.design_x_spin.value())
+        layer["y"] = int(self.design_y_spin.value())
+        layer["width"] = max(1, int(self.design_w_spin.value()))
+        layer["height"] = max(1, int(self.design_h_spin.value()))
+        layer["start"] = max(0.0, float(self.design_start_spin.value()))
+        layer["end"] = max(0.0, float(self.design_end_spin.value()))
+        if layer["end"] > layer["start"]:
+            page = self._design_page(state)
+            page["duration"] = max(float(page.get("duration", 5.0) or 5.0), layer["end"])
+        layer["opacity"] = max(0.0, min(1.0, float(self.design_opacity_spin.value())))
+        self.selected_track = "design"
+        self._commit_design_state(state, sync_controls=False)
+
+    def pick_design_color(self):
+        state = self._current_design_state()
+        layer = self._selected_design_layer(state)
+        if not layer:
+            return
+        color = QColorDialog.getColor(QColor(str(layer.get("fill", "#FFFFFF"))), self, "选择设计颜色")
+        if not color.isValid():
+            return
+        layer["fill"] = color.name().upper()
+        self._commit_design_state(state, "🎨 已更新设计颜色。")
+
+    def move_design_layer(self, direction):
+        state = self._current_design_state()
+        page = self._design_page(state)
+        layers = sorted(page.get("layers", []), key=lambda item: int(float(item.get("zIndex", 0) or 0)))
+        idx = next((i for i, layer in enumerate(layers) if layer.get("id") == self.selected_design_layer_id), -1)
+        next_idx = idx + int(direction)
+        if idx < 0 or next_idx < 0 or next_idx >= len(layers):
+            return
+        layers[idx]["zIndex"], layers[next_idx]["zIndex"] = layers[next_idx].get("zIndex", next_idx), layers[idx].get("zIndex", idx)
+        self._commit_design_state(state)
+
+    def delete_selected_design_layer(self):
+        state = self._current_design_state()
+        page = self._design_page(state)
+        before = len(page.get("layers", []))
+        page["layers"] = [layer for layer in page.get("layers", []) if layer.get("id") != self.selected_design_layer_id]
+        if len(page["layers"]) == before:
+            return
+        self.selected_design_layer_id = page["layers"][-1].get("id", "") if page["layers"] else ""
+        self._commit_design_state(state, "🗑️ 已删除设计图层。")
+
+    def clear_design_layers(self):
+        state = self._current_design_state()
+        page = self._design_page(state)
+        page["layers"] = []
+        self.selected_design_layer_id = ""
+        self._commit_design_state(state, "已清空设计叠层。")
+
+    def design_timeline_layers(self):
+        state = self._current_design_state()
+        page = self._design_page(state)
+        page_duration = max(float(page.get("duration", 5.0) or 5.0), float(self.state.get("duration", 5.0) or 5.0))
+        layers = []
+        for layer in page.get("layers", []) or []:
+            item = copy.deepcopy(layer)
+            item["_page_duration"] = page_duration
+            try:
+                item["timelineTrack"] = max(6, min(7, int(float(item.get("timelineTrack", 6) or 6))))
+            except Exception:
+                item["timelineTrack"] = 6
+            if float(item.get("end", 0.0) or 0.0) <= float(item.get("start", 0.0) or 0.0):
+                item["end"] = page_duration
+            layers.append(item)
+        return layers
+
+    def select_design_layer_by_index(self, idx):
+        state = self._current_design_state()
+        page = self._design_page(state)
+        layers = page.get("layers", []) or []
+        if not (0 <= idx < len(layers)):
+            return
+        self.selected_design_layer_id = layers[idx].get("id", "")
+        self.selected_track = "design"
+        self.sync_design_panel_controls()
+        self.show_canvas_context_toolbar("design")
+        self.timeline_widget.sync_from_controller()
+        self._update_workspace_status()
+
+    def update_design_layer_timing_by_index(self, idx, new_start, new_end, new_track):
+        state = self._current_design_state()
+        page = self._design_page(state)
+        layers = page.get("layers", []) or []
+        if not (0 <= idx < len(layers)):
+            return
+        layer = layers[idx]
+        layer["start"] = max(0.0, float(new_start or 0.0))
+        layer["end"] = max(layer["start"] + 0.05, float(new_end or 0.0))
+        layer["timelineTrack"] = max(6, min(7, int(new_track or 6)))
+        page["duration"] = max(float(page.get("duration", 5.0) or 5.0), layer["end"])
+        self.selected_design_layer_id = layer.get("id", "")
+        self.selected_track = "design"
+        self._commit_design_state(state, sync_controls=False, sync_timeline=False)
+        self.sync_design_panel_controls()
+
     def init_ui(self):
+        self.setAcceptDrops(True)
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setContentsMargins(4, 4, 4, 4)
+        main_layout.setSpacing(4)
         
         main_v_splitter = QSplitter(Qt.Orientation.Vertical)
         top_h_splitter = QSplitter(Qt.Orientation.Horizontal)
-        self.setStyleSheet("QSplitter::handle { background-color: #313244; margin: 2px; }")
+        self.setStyleSheet("""
+            QSplitter::handle {
+                background-color: #313244;
+                margin: 1px;
+            }
+            QSplitter::handle:vertical {
+                height: 9px;
+                background-color: #4b5274;
+            }
+            QSplitter::handle:horizontal {
+                width: 6px;
+                background-color: #2b3040;
+            }
+        """)
+        main_v_splitter.setHandleWidth(9)
+        top_h_splitter.setHandleWidth(6)
         
-        # 👑 注入 Ctrl+Z 快捷键
-        self.shortcut_undo = QShortcut(QKeySequence("Ctrl+Z"), self)
-        self.shortcut_undo.activated.connect(self.undo)
-        self.shortcut_redo = QShortcut(QKeySequence("Ctrl+Y"), self)
-        self.shortcut_redo.activated.connect(self.redo)
-        self.shortcut_redo_mac = QShortcut(QKeySequence("Ctrl+Shift+Z"), self)
-        self.shortcut_redo_mac.activated.connect(self.redo)
+        # Ctrl+Z / Ctrl+Y 由主窗口按当前房间统一分发，避免焦点落在控件上时快捷键冲突。
+        self.shortcut_play = QShortcut(QKeySequence("Space"), self)
+        self.shortcut_play.activated.connect(self.toggle_play_from_shortcut)
+        self.shortcut_step_back = QShortcut(QKeySequence("Left"), self)
+        self.shortcut_step_back.activated.connect(lambda: self.seek_relative_from_shortcut(-0.1))
+        self.shortcut_step_forward = QShortcut(QKeySequence("Right"), self)
+        self.shortcut_step_forward.activated.connect(lambda: self.seek_relative_from_shortcut(0.1))
+        self.shortcut_step_back_big = QShortcut(QKeySequence("Shift+Left"), self)
+        self.shortcut_step_back_big.activated.connect(lambda: self.seek_relative_from_shortcut(-1.0))
+        self.shortcut_step_forward_big = QShortcut(QKeySequence("Shift+Right"), self)
+        self.shortcut_step_forward_big.activated.connect(lambda: self.seek_relative_from_shortcut(1.0))
+        self.shortcut_preview_zoom_in = QShortcut(QKeySequence("Ctrl++"), self)
+        self.shortcut_preview_zoom_in.activated.connect(lambda: self.adjust_preview_zoom_from_shortcut(1))
+        self.shortcut_preview_zoom_in_alt = QShortcut(QKeySequence("Ctrl+="), self)
+        self.shortcut_preview_zoom_in_alt.activated.connect(lambda: self.adjust_preview_zoom_from_shortcut(1))
+        self.shortcut_preview_zoom_out = QShortcut(QKeySequence("Ctrl+-"), self)
+        self.shortcut_preview_zoom_out.activated.connect(lambda: self.adjust_preview_zoom_from_shortcut(-1))
+        self.shortcut_preview_zoom_reset = QShortcut(QKeySequence("Ctrl+0"), self)
+        self.shortcut_preview_zoom_reset.activated.connect(self.reset_preview_view_from_shortcut)
+        self.shortcut_focus_canvas = QShortcut(QKeySequence("F11"), self)
+        self.shortcut_focus_canvas.activated.connect(self.toggle_canvas_focus_mode)
+        self.shortcut_prev_project = QShortcut(QKeySequence("Alt+Left"), self)
+        self.shortcut_prev_project.activated.connect(lambda: self.switch_sibling_project(-1))
+        self.shortcut_next_project = QShortcut(QKeySequence("Alt+Right"), self)
+        self.shortcut_next_project.activated.connect(lambda: self.switch_sibling_project(1))
+
+        top_app_bar = QFrame()
+        top_app_bar.setObjectName("editorTopBar")
+        top_app_bar.setFixedHeight(56)
+        top_app_bar.setStyleSheet("""
+            QFrame#editorTopBar {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #08b9c8, stop:0.45 #2f8ee6, stop:1 #7c35f4);
+                border-radius: 0px;
+            }
+            QFrame#editorTopBar QLabel { color: white; border: none; }
+            QFrame#editorTopBar QPushButton {
+                background: rgba(255,255,255,0.12);
+                color: white;
+                border: 1px solid rgba(255,255,255,0.18);
+                border-radius: 6px;
+                padding: 7px 12px;
+                font-weight: 700;
+            }
+            QFrame#editorTopBar QPushButton:hover { background: rgba(255,255,255,0.20); }
+            QFrame#editorTopBar QPushButton:checked {
+                background: rgba(255,255,255,0.92);
+                color: #111827;
+                border-color: rgba(255,255,255,0.92);
+            }
+        """)
+        top_app_layout = QHBoxLayout(top_app_bar)
+        top_app_layout.setContentsMargins(12, 8, 8, 8)
+        top_app_layout.setSpacing(8)
+        self.btn_top_home = QPushButton("⌂")
+        self.btn_top_home.setFixedSize(34, 34)
+        self.btn_top_home.setToolTip("工程大厅")
+        self.btn_top_home.clicked.connect(lambda: self.parent_window().switch_room(0) if self.parent_window() and hasattr(self.parent_window(), "switch_room") else None)
+        self.btn_top_size = QPushButton("调整尺寸")
+        self.btn_top_size.setToolTip("在右侧参数栏里调整全局比例")
+        self.btn_top_size.clicked.connect(lambda: self.switch_inspector("video") if self.state.get("video_clips") else self.tabs.setCurrentIndex(1))
+        self.btn_top_edit = QPushButton("编辑模式")
+        self.btn_top_edit.setCheckable(True)
+        self.btn_top_edit.setToolTip("解锁字幕编辑、素材拖放、剪刀和简单转场")
+        self.btn_top_edit.clicked.connect(lambda checked: self.set_edit_mode(bool(checked)))
+        self.btn_top_edit.hide()
+        self.btn_top_undo = QPushButton("↶")
+        self.btn_top_undo.setFixedSize(34, 34)
+        self.btn_top_undo.setToolTip("撤销 Ctrl+Z")
+        self.btn_top_undo.clicked.connect(self.undo)
+        self.btn_top_redo = QPushButton("↷")
+        self.btn_top_redo.setFixedSize(34, 34)
+        self.btn_top_redo.setToolTip("重做 Ctrl+Y")
+        self.btn_top_redo.clicked.connect(self.redo)
+        self.btn_top_save = QPushButton("云保存")
+        self.btn_top_save.setToolTip("保存当前工程")
+        self.btn_top_save.clicked.connect(self.manual_save)
+        self.btn_toggle_left = QPushButton("侧栏")
+        self.btn_toggle_left.setCheckable(True)
+        self.btn_toggle_left.setChecked(True)
+        self.btn_toggle_left.setToolTip("显示/隐藏左侧工程栏")
+        self.btn_toggle_left.clicked.connect(lambda checked: self.set_left_sidebar_visible(bool(checked)))
+        self.btn_toggle_right = QPushButton("参数")
+        self.btn_toggle_right.setCheckable(True)
+        self.btn_toggle_right.setChecked(True)
+        self.btn_toggle_right.setToolTip("显示/隐藏右侧参数栏")
+        self.btn_toggle_right.clicked.connect(lambda checked: self.set_right_sidebar_visible(bool(checked)))
+        self.btn_toggle_timeline = QPushButton("时间线")
+        self.btn_toggle_timeline.setCheckable(True)
+        self.btn_toggle_timeline.setChecked(False)
+        self.btn_toggle_timeline.setToolTip("显示/隐藏时间线")
+        self.btn_toggle_timeline.clicked.connect(lambda checked: self.set_timeline_visible(bool(checked)))
+        self.btn_canvas_focus = QPushButton("大画布")
+        self.btn_canvas_focus.setCheckable(True)
+        self.btn_canvas_focus.setToolTip("隐藏侧栏并压缩时间线，最大化预览画布")
+        self.btn_canvas_focus.clicked.connect(self.toggle_canvas_focus_mode)
+        self.btn_caption_effects = QPushButton("字幕效果")
+        self.btn_caption_effects.setToolTip("在右侧参数栏调节字幕样式")
+        self.btn_caption_effects.clicked.connect(lambda: self.open_effects_dialog("caption"))
+        self.btn_media_effects = QPushButton("视频声音")
+        self.btn_media_effects.setToolTip("在右侧参数栏调节视频和声音")
+        self.btn_media_effects.clicked.connect(lambda: self.open_effects_dialog("media"))
+        self.btn_signature_effects = QPushButton("署名")
+        self.btn_signature_effects.setToolTip("在右侧参数栏调节全局署名")
+        self.btn_signature_effects.clicked.connect(lambda: self.open_effects_dialog("signature"))
+        top_app_layout.addWidget(self.btn_top_home)
+        top_app_layout.addWidget(self.btn_top_size)
+        top_app_layout.addWidget(self.btn_top_edit)
+        top_app_layout.addSpacing(6)
+        top_app_layout.addWidget(self.btn_top_undo)
+        top_app_layout.addWidget(self.btn_top_redo)
+        top_app_layout.addWidget(self.btn_top_save)
+        top_app_layout.addSpacing(8)
+        top_app_layout.addWidget(self.btn_toggle_left)
+        top_app_layout.addWidget(self.btn_toggle_right)
+        top_app_layout.addWidget(self.btn_toggle_timeline)
+        top_app_layout.addWidget(self.btn_canvas_focus)
+        top_app_layout.addSpacing(8)
+        top_app_layout.addWidget(self.btn_caption_effects)
+        top_app_layout.addWidget(self.btn_media_effects)
+        top_app_layout.addWidget(self.btn_signature_effects)
+        top_app_layout.addStretch()
+        self.lbl_top_project_name = QLabel(self._project_display_name())
+        self.lbl_top_project_name.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_top_project_name.setStyleSheet("font-size: 14px; font-weight: 800;")
+        top_app_layout.addWidget(self.lbl_top_project_name)
+        top_app_layout.addStretch()
+        self.lbl_top_user = QLabel("ZH")
+        self.lbl_top_user.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_top_user.setFixedSize(34, 34)
+        self.lbl_top_user.setStyleSheet("background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.24); border-radius: 17px; font-weight: 800;")
+        self.btn_top_preview = QPushButton("预览")
+        self.btn_top_preview.clicked.connect(self.toggle_play)
+        self.btn_top_share = QPushButton("分享")
+        self.btn_top_share.setStyleSheet("background: white; color: #27164a; border-radius: 6px; padding: 8px 14px; font-weight: 900;")
+        self.btn_top_share.clicked.connect(self.manual_save)
+        top_app_layout.addWidget(self.lbl_top_user)
+        top_app_layout.addWidget(self.btn_top_preview)
+        top_app_layout.addWidget(self.btn_top_share)
+        self.top_app_bar = top_app_bar
 
         # ================= 1. 左侧面板 =================
-        left_panel = QFrame(); left_panel.setStyleSheet("background-color: #181825; border-radius: 8px;"); left_layout = QVBoxLayout(left_panel)
-        left_panel.setMinimumWidth(220)
+        left_panel = QFrame(); left_panel.setStyleSheet("background-color: #181b24; border-radius: 0px;"); left_layout = QVBoxLayout(left_panel)
+        left_panel.setMinimumWidth(200)
+        left_layout.setContentsMargins(14, 14, 14, 12)
         left_layout.setSpacing(8)
+
+        project_header = QHBoxLayout()
+        self.lbl_side_panel_title = QLabel("工程")
+        self.lbl_side_panel_title.setStyleSheet("color: #ffffff; font-size: 14px; font-weight: 900;")
+        self.btn_collapse_left_panel = QPushButton("收起")
+        self.btn_collapse_left_panel.setFixedSize(54, 28)
+        self.btn_collapse_left_panel.setToolTip("只保留左侧小导航")
+        self.btn_collapse_left_panel.setStyleSheet("background-color: #242b3f; color: #cdd6f4; border: 1px solid #3a425a; border-radius: 6px; font-weight: bold;")
+        self.btn_collapse_left_panel.clicked.connect(lambda: self.set_left_sidebar_visible(False))
+        project_header.addWidget(self.lbl_side_panel_title)
+        project_header.addStretch()
+        self.btn_collapse_left_panel.setVisible(False)
+        left_layout.addLayout(project_header)
+
+        self.side_search = QLineEdit()
+        self.side_search.setPlaceholderText("搜索工程 / 字幕 / 素材")
+        self.side_search.setMinimumHeight(38)
+        self.side_search.setStyleSheet("background-color: #10131b; color: #cdd6f4; border: 1px solid #363b4d; border-radius: 8px; padding: 0 12px;")
+        left_layout.addWidget(self.side_search)
 
         top_btn_row = QHBoxLayout()
         self.btn_reset = QPushButton("🔄 清空"); self.btn_reset.setFixedHeight(35); self.btn_reset.setStyleSheet("background-color: #313244; border-radius: 5px; color: white;"); self.btn_reset.clicked.connect(self.reset_project)
@@ -362,6 +1178,132 @@ class EditView(QWidget):
         self.btn_a = QPushButton("🎵 导入独立配音 (可选)"); self.btn_a.setFixedHeight(35); self.btn_a.setStyleSheet("background-color: #313244; font-size: 13px; border-radius: 5px; color: white;"); self.btn_a.clicked.connect(self.load_audio)
         self.btn_a_del = QPushButton("🗑️ 删除"); self.btn_a_del.setFixedWidth(80); self.btn_a_del.setFixedHeight(35); self.btn_a_del.setStyleSheet("background-color: #f38ba8; color: #11111b; font-weight: bold; border-radius: 5px;"); self.btn_a_del.clicked.connect(self.remove_audio)
         aud_ctrl_layout.addWidget(self.btn_a); aud_ctrl_layout.addWidget(self.btn_a_del); left_layout.addLayout(aud_ctrl_layout)
+
+        music_ctrl_layout = QHBoxLayout()
+        self.btn_music = QPushButton("🎼 导入配乐 (可选)"); self.btn_music.setFixedHeight(35); self.btn_music.setStyleSheet("background-color: #313244; font-size: 13px; border-radius: 5px; color: white;"); self.btn_music.clicked.connect(self.load_music)
+        self.btn_music_match = QPushButton("匹配时长"); self.btn_music_match.setFixedWidth(88); self.btn_music_match.setFixedHeight(35); self.btn_music_match.setStyleSheet("background-color: #f9e2af; color: #11111b; font-weight: bold; border-radius: 5px;"); self.btn_music_match.clicked.connect(self.match_music_to_audio)
+        self.btn_music_del = QPushButton("删除"); self.btn_music_del.setFixedWidth(60); self.btn_music_del.setFixedHeight(35); self.btn_music_del.setStyleSheet("background-color: #45475a; color: #f38ba8; font-weight: bold; border-radius: 5px;"); self.btn_music_del.clicked.connect(self.remove_music)
+        music_ctrl_layout.addWidget(self.btn_music); music_ctrl_layout.addWidget(self.btn_music_match); music_ctrl_layout.addWidget(self.btn_music_del); left_layout.addLayout(music_ctrl_layout)
+
+        design_box = QFrame()
+        self.design_box = design_box
+        design_box.setObjectName("leftDesignPanel")
+        design_box.setStyleSheet("""
+            QFrame#leftDesignPanel {
+                background-color: #121620;
+                border: 1px solid #2d3548;
+                border-radius: 8px;
+            }
+            QLabel { color: #cdd6f4; border: none; }
+        """)
+        design_layout = QVBoxLayout(design_box)
+        design_layout.setContentsMargins(9, 8, 9, 9)
+        design_layout.setSpacing(7)
+        design_header = QHBoxLayout()
+        design_header.addWidget(QLabel("🎨 设计组件", styleSheet="color:#f9e2af; font-weight:900;"))
+        design_header.addStretch()
+        self.btn_design_clear = QPushButton("清空")
+        self.btn_design_clear.setFixedSize(48, 24)
+        self.btn_design_clear.setToolTip("清空当前设计叠层")
+        self.btn_design_clear.setStyleSheet("background-color:#2a3044; color:#f38ba8; border:1px solid #454f6d; border-radius:5px; font-size:11px; font-weight:800;")
+        self.btn_design_clear.clicked.connect(self.clear_design_layers)
+        design_header.addWidget(self.btn_design_clear)
+        design_layout.addLayout(design_header)
+
+        design_grid = QGridLayout()
+        design_grid.setSpacing(5)
+        design_items = [
+            ("标题", "title"), ("正文", "body"), ("祷告", "prayer"), ("色块", "rect"),
+            ("强调条", "highlight"), ("下栏", "lower"), ("引用卡", "quote"), ("分隔线", "divider"),
+        ]
+        for i, (label, kind) in enumerate(design_items):
+            btn = QPushButton(label)
+            btn.setFixedHeight(28)
+            btn.setToolTip(f"添加{label}设计层")
+            btn.setStyleSheet("background-color:#202433; color:#edf2f7; border:1px solid #343d52; border-radius:6px; font-size:12px; font-weight:800;")
+            btn.clicked.connect(lambda checked=False, k=kind: self.add_design_component(k))
+            design_grid.addWidget(btn, i // 2, i % 2)
+        design_layout.addLayout(design_grid)
+        self.btn_design_image = QPushButton("导入图片组件")
+        self.btn_design_image.setFixedHeight(30)
+        self.btn_design_image.setStyleSheet("background-color:#313244; color:#89b4fa; border:1px solid #454f6d; border-radius:6px; font-weight:800;")
+        self.btn_design_image.clicked.connect(self.add_design_image_dialog)
+        design_layout.addWidget(self.btn_design_image)
+
+        design_page_row = QHBoxLayout()
+        design_page_row.addWidget(QLabel("页长"))
+        self.design_page_duration_spin = QDoubleSpinBox()
+        self.design_page_duration_spin.setRange(0.1, 3600.0)
+        self.design_page_duration_spin.setSingleStep(0.5)
+        self.design_page_duration_spin.setSuffix("s")
+        self.design_page_duration_spin.setFixedHeight(28)
+        self.design_page_duration_spin.setStyleSheet("background:#10131b; color:white; border:1px solid #31384d; border-radius:5px;")
+        self.design_page_duration_spin.valueChanged.connect(self._on_design_page_duration_change)
+        design_page_row.addWidget(self.design_page_duration_spin, stretch=1)
+        design_layout.addLayout(design_page_row)
+
+        self.design_layer_combo = QComboBox()
+        self.design_layer_combo.setStyleSheet("background-color:#10131b; color:#cdd6f4; border:1px solid #31384d; border-radius:6px; padding:5px;")
+        self.design_layer_combo.currentIndexChanged.connect(self._on_design_layer_combo_changed)
+        design_layout.addWidget(self.design_layer_combo)
+
+        self.design_layer_name = QLineEdit()
+        self.design_layer_name.setPlaceholderText("图层名称")
+        self.design_layer_name.setStyleSheet("background-color:#10131b; color:#cdd6f4; border:1px solid #31384d; border-radius:6px; padding:5px;")
+        self.design_layer_name.textChanged.connect(self._on_design_property_change)
+        design_layout.addWidget(self.design_layer_name)
+
+        self.design_text_input = QTextEdit()
+        self.design_text_input.setFixedHeight(54)
+        self.design_text_input.setPlaceholderText("文字内容")
+        self.design_text_input.setStyleSheet("background-color:#10131b; color:#cdd6f4; border:1px solid #31384d; border-radius:6px; padding:5px;")
+        self.design_text_input.textChanged.connect(self._on_design_property_change)
+        design_layout.addWidget(self.design_text_input)
+
+        transform_grid = QGridLayout()
+        transform_grid.setSpacing(5)
+        self.design_x_spin = self._make_design_spin(0, 3000, 1)
+        self.design_y_spin = self._make_design_spin(0, 4000, 1)
+        self.design_w_spin = self._make_design_spin(1, 3000, 1)
+        self.design_h_spin = self._make_design_spin(1, 4000, 1)
+        for idx, (label, spin) in enumerate([("X", self.design_x_spin), ("Y", self.design_y_spin), ("W", self.design_w_spin), ("H", self.design_h_spin)]):
+            transform_grid.addWidget(QLabel(label), idx // 2, (idx % 2) * 2)
+            transform_grid.addWidget(spin, idx // 2, (idx % 2) * 2 + 1)
+        design_layout.addLayout(transform_grid)
+
+        time_grid = QGridLayout()
+        time_grid.setSpacing(5)
+        self.design_start_spin = self._make_design_double_spin(0.0, 3600.0, 0.1, "s")
+        self.design_end_spin = self._make_design_double_spin(0.0, 3600.0, 0.1, "s")
+        self.design_size_spin = self._make_design_spin(8, 300, 1)
+        self.design_opacity_spin = self._make_design_double_spin(0.0, 1.0, 0.05, "")
+        for idx, (label, spin) in enumerate([("入", self.design_start_spin), ("出", self.design_end_spin), ("字", self.design_size_spin), ("透", self.design_opacity_spin)]):
+            time_grid.addWidget(QLabel(label), idx // 2, (idx % 2) * 2)
+            time_grid.addWidget(spin, idx // 2, (idx % 2) * 2 + 1)
+        design_layout.addLayout(time_grid)
+
+        design_style_row = QHBoxLayout()
+        self.design_align_combo = QComboBox()
+        self.design_align_combo.addItems(["left", "center", "right"])
+        self.design_align_combo.setStyleSheet("background:#10131b; color:#cdd6f4; border:1px solid #31384d; border-radius:5px; padding:4px;")
+        self.design_align_combo.currentTextChanged.connect(self._on_design_property_change)
+        self.btn_design_color = QPushButton("颜色")
+        self.btn_design_color.setStyleSheet("background-color:#313244; color:#ffffff; border:1px solid #454f6d; border-radius:6px; font-weight:800;")
+        self.btn_design_color.clicked.connect(self.pick_design_color)
+        design_style_row.addWidget(self.design_align_combo, stretch=1)
+        design_style_row.addWidget(self.btn_design_color)
+        design_layout.addLayout(design_style_row)
+
+        design_action_row = QHBoxLayout()
+        for label, callback in [("上移", lambda: self.move_design_layer(1)), ("下移", lambda: self.move_design_layer(-1)), ("删除", self.delete_selected_design_layer)]:
+            btn = QPushButton(label)
+            btn.setFixedHeight(28)
+            btn.setStyleSheet("background-color:#242b3f; color:#cdd6f4; border:1px solid #3a425a; border-radius:6px; font-size:12px; font-weight:800;")
+            btn.clicked.connect(callback)
+            design_action_row.addWidget(btn)
+        design_layout.addLayout(design_action_row)
+        left_layout.addWidget(design_box)
+        design_box.hide()
         
         # 👑 改造剪贴板 UI：加入一键排版按钮
         text_header_layout = QHBoxLayout()
@@ -412,40 +1354,269 @@ class EditView(QWidget):
         self.status_lbl = QLabel("✅ 引擎就绪"); self.status_lbl.setStyleSheet("color: #a6e3a1; font-weight: bold;"); left_layout.addWidget(self.status_lbl)
 
         # ================= 2. 中间面板 =================
-        center_panel = QFrame(); center_panel.setStyleSheet("background-color: #11111b; border-radius: 8px;"); center_layout = QVBoxLayout(center_panel)
-        stack_widget = QWidget(); stack_widget.setStyleSheet("background-color: #000;"); grid = QGridLayout(stack_widget); grid.setContentsMargins(0, 0, 0, 0)
+        center_panel = QFrame(); center_panel.setStyleSheet("background-color: #090b12; border: none; border-radius: 0px;"); center_layout = QVBoxLayout(center_panel)
+        center_layout.setContentsMargins(12, 8, 12, 8)
+        center_layout.setSpacing(8)
+        monitor_bar = QFrame()
+        monitor_bar.setStyleSheet("QFrame { background-color: #171a23; border: 1px solid #2b3040; border-radius: 8px; } QLabel { border: none; }")
+        monitor_bar_layout = QHBoxLayout(monitor_bar)
+        monitor_bar_layout.setContentsMargins(10, 6, 10, 6)
+        monitor_bar_layout.setSpacing(10)
+        self.lbl_monitor_title = QLabel("PROGRAM MONITOR")
+        self.lbl_monitor_title.setStyleSheet("color: #f9e2af; font-size: 11px; font-weight: 800; letter-spacing: 1px;")
+        self.lbl_workspace_stats = QLabel("未导入素材")
+        self.lbl_workspace_stats.setStyleSheet("color: #cdd6f4; font-size: 12px; font-weight: 700;")
+        self.lbl_monitor_meta = QLabel("1080x1920 · 50 px/s")
+        self.lbl_monitor_meta.setStyleSheet("color: #89b4fa; font-family: Consolas; font-size: 11px;")
+        monitor_bar_layout.addWidget(self.lbl_monitor_title)
+        monitor_bar_layout.addSpacing(4)
+        monitor_bar_layout.addWidget(self.lbl_workspace_stats, stretch=1)
+        self.btn_edit_mode = QPushButton("编辑模式")
+        self.btn_edit_mode.setCheckable(True)
+        self.btn_edit_mode.setFixedHeight(28)
+        self.btn_edit_mode.setToolTip("开启后可拖放素材、移动字幕、剪刀切分和添加简单转场")
+        self.btn_edit_mode.setStyleSheet("""
+            QPushButton {
+                background-color: #242b3f;
+                color: #cdd6f4;
+                border: 1px solid #3a425a;
+                border-radius: 7px;
+                padding: 4px 10px;
+                font-weight: 800;
+            }
+            QPushButton:checked {
+                background-color: #89b4fa;
+                color: #11111b;
+                border-color: #89b4fa;
+            }
+        """)
+        self.btn_edit_mode.clicked.connect(lambda checked: self.set_edit_mode(bool(checked)))
+        self.btn_edit_mode.hide()
+        monitor_bar_layout.addWidget(self.btn_edit_mode)
+        monitor_bar_layout.addWidget(self.lbl_monitor_meta)
+        center_layout.addWidget(monitor_bar)
+
+        self.canvas_context_toolbar = QFrame(center_panel)
+        self.canvas_context_toolbar.setVisible(False)
+        self.canvas_context_toolbar.setFixedHeight(42)
+        self.canvas_context_toolbar.setStyleSheet("""
+            QFrame {
+                background-color: #1a1d27;
+                border: 1px solid #2f3548;
+                border-radius: 9px;
+            }
+            QPushButton {
+                background: transparent;
+                color: #f4f6ff;
+                border: none;
+                border-radius: 6px;
+                padding: 6px 9px;
+                font-weight: 800;
+            }
+            QPushButton:hover { background: #2a3044; }
+            QPushButton:checked { background: #89b4fa; color: #11111b; }
+            QPushButton:disabled { color: #6f778c; }
+            QLabel { color: #5f6b84; border: none; }
+        """)
+        canvas_tool_layout = QHBoxLayout(self.canvas_context_toolbar)
+        canvas_tool_layout.setContentsMargins(8, 5, 8, 5)
+        canvas_tool_layout.setSpacing(4)
+        self.lbl_canvas_context = QLabel("画面")
+        self.lbl_canvas_context.setStyleSheet("color: #a6adc8; font-size: 11px; font-weight: 900;")
+        canvas_tool_layout.addWidget(self.lbl_canvas_context)
+
+        self.ctx_buttons = {}
+
+        def add_context_button(key, text, tip, callback):
+            btn = QPushButton(text)
+            btn.setToolTip(tip)
+            btn.clicked.connect(callback)
+            btn.setVisible(False)
+            canvas_tool_layout.addWidget(btn)
+            self.ctx_buttons[key] = btn
+            return btn
+
+        self.btn_context_edit_mode = add_context_button("edit_mode", "编辑模式", "解锁当前画布与时间线剪辑工具", lambda: self.set_edit_mode(not self.edit_mode))
+        self.btn_context_edit_mode.setCheckable(True)
+        self.btn_context_edit_mode.hide()
+        add_context_button("import_media", "导入", "拖放或选择视频/音频素材加入时间线", self.import_media_dialog)
+        add_context_button("split", "剪刀", "在播放头位置切开当前片段", self.split_at_playhead)
+        add_context_button("transition", "转场", "给当前片段添加简单淡化转场", self.apply_simple_transition)
+        add_context_button("monitor", "画面", "切换大画面工作区", self.toggle_canvas_focus_mode)
+        add_context_button("caption", "字幕选项", "在侧栏调整字幕文字、样式与动效", lambda: self.open_effects_dialog("caption"))
+        add_context_button("signature", "署名", "打开全局署名设置", lambda: self.open_effects_dialog("signature"))
+        self.ctx_separator_media = QLabel("|")
+        self.ctx_separator_media.setVisible(False)
+        canvas_tool_layout.addWidget(self.ctx_separator_media)
+        add_context_button("video_duration", "时长", "在侧栏调整视频时长与画面参数", lambda: self.open_effects_dialog("media"))
+        add_context_button("audio", "音频", "在侧栏调整配音与音量", lambda: self.open_effects_dialog("audio"))
+        add_context_button("speed", "速度", "打开媒体速度/时长相关调节", lambda: self.open_effects_dialog("media"))
+        add_context_button("position", "位置", "打开字幕位置与排版调节", lambda: self.open_effects_dialog("position"))
+        add_context_button("motion", "动效", "打开字幕动效调节", lambda: self.open_effects_dialog("motion"))
+        canvas_tool_layout.addStretch()
+        add_context_button("flip", "翻转", "打开视频画面设置", lambda: self.open_effects_dialog("media"))
+        add_context_button("delete", "删除", "删除当前选中的字幕或视频", self.delete_context_selection)
+        stack_widget = QWidget(); stack_widget.setObjectName("previewStage"); stack_widget.setAcceptDrops(False); stack_widget.setStyleSheet("QWidget#previewStage { background-color: #000; border: 1px solid #4b5168; border-radius: 2px; }")
+        grid = QGridLayout(stack_widget); grid.setContentsMargins(1, 1, 1, 1); grid.setSpacing(0)
         self.video_label = QLabel(); self.video_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.player = QMediaPlayer(); self.audio_output = QAudioOutput(); self.player.setAudioOutput(self.audio_output); self.video_sink = QVideoSink()
         self.player.setLoops(QMediaPlayer.Loops.Infinite)
         self.player.setVideoOutput(self.video_sink); self.video_sink.videoFrameChanged.connect(self.on_video_frame)
         self.player.mediaStatusChanged.connect(self._on_video_media_status_changed)
         self.audio_player = QMediaPlayer(); self.audio_track_output = QAudioOutput(); self.audio_player.setAudioOutput(self.audio_track_output)
+        self.audio_player.mediaStatusChanged.connect(self._on_audio_media_status_changed)
         
         self.browser = QWebEngineView(); self.browser.settings().setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
         self.browser.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground); self.browser.page().setBackgroundColor(Qt.GlobalColor.transparent)
+        self.browser.setAcceptDrops(False)
+        self.video_label.setAcceptDrops(False)
         
         self.bridge = WebBridge(self); self.channel = QWebChannel(); self.channel.registerObject("backend", self.bridge); self.browser.page().setWebChannel(self.channel)
         
         grid.addWidget(self.video_label, 0, 0); grid.addWidget(self.browser, 0, 0); self.browser.raise_()
-        self.aspect_container = AspectRatioContainer(stack_widget); center_layout.addWidget(self.aspect_container, stretch=1)
-        
-        ctrl_row = QHBoxLayout(); self.btn_play = QPushButton("▶️ 播放"); self.btn_play.setFixedSize(80, 30); self.btn_play.setStyleSheet("background-color: #a6e3a1; color: #11111b; font-weight: bold; border-radius: 5px;"); self.btn_play.clicked.connect(self.toggle_play); ctrl_row.addWidget(self.btn_play)
-        self.btn_add_text = QPushButton("➕ 在当前时间加文字"); self.btn_add_text.setFixedSize(160, 30); self.btn_add_text.setStyleSheet("background-color: #89b4fa; color: #11111b; font-weight: bold; border-radius: 5px;"); self.btn_add_text.clicked.connect(self.add_manual_text)
-        self.chk_safe_area = QCheckBox("显示安全框"); self.chk_safe_area.setChecked(True); self.chk_safe_area.setStyleSheet("color: #a6e3a1; font-weight: bold; margin-left: 15px;"); self.chk_safe_area.stateChanged.connect(self.toggle_safe_area)
-        ctrl_row.addWidget(self.btn_add_text); ctrl_row.addWidget(self.chk_safe_area)
-        self.lbl_time = QLabel("00:00.0 / 00:00.0"); self.lbl_time.setStyleSheet("font-family: Consolas; color: #f9e2af; margin-left: 15px;"); ctrl_row.addWidget(self.lbl_time); ctrl_row.addStretch(); center_layout.addLayout(ctrl_row)
+        self.preview_workspace = PreviewWorkspace(stack_widget, self)
+        self.aspect_container = self.preview_workspace
+        center_layout.addWidget(self.preview_workspace, stretch=1)
+        self.canvas_context_toolbar.raise_()
+
+        controls_panel = QFrame()
+        controls_panel.setStyleSheet("QFrame { background-color: #171a23; border: 1px solid #2b3040; border-radius: 8px; }")
+        controls_layout = QVBoxLayout(controls_panel)
+        controls_layout.setContentsMargins(8, 6, 8, 6)
+        controls_layout.setSpacing(5)
+
+        transport_row = QHBoxLayout()
+        transport_row.setSpacing(6)
+        self.btn_step_back = QPushButton("‹0.1"); self.btn_step_back.setFixedSize(48, 28); self.btn_step_back.setToolTip("后退 0.1 秒"); self.btn_step_back.setStyleSheet("background-color: #313244; color: #cdd6f4; font-weight: bold; border-radius: 5px;"); self.btn_step_back.clicked.connect(lambda: self.seek_relative(-0.1)); transport_row.addWidget(self.btn_step_back)
+        self.btn_play = QPushButton("▶ 播放"); self.btn_play.setFixedSize(74, 28); self.btn_play.setStyleSheet("background-color: #a6e3a1; color: #11111b; font-weight: bold; border-radius: 5px;"); self.btn_play.clicked.connect(self.toggle_play); transport_row.addWidget(self.btn_play)
+        self.btn_step_forward = QPushButton("0.1›"); self.btn_step_forward.setFixedSize(48, 28); self.btn_step_forward.setToolTip("前进 0.1 秒"); self.btn_step_forward.setStyleSheet("background-color: #313244; color: #cdd6f4; font-weight: bold; border-radius: 5px;"); self.btn_step_forward.clicked.connect(lambda: self.seek_relative(0.1)); transport_row.addWidget(self.btn_step_forward)
+        self.lbl_time = QLabel("00:00.0 / 00:00.0"); self.lbl_time.setMinimumWidth(118); self.lbl_time.setStyleSheet("font-family: Consolas; color: #f9e2af; font-size: 12px; font-weight: bold;"); transport_row.addWidget(self.lbl_time)
+        self.preview_seek_slider = NoScrollSlider(Qt.Orientation.Horizontal)
+        self.preview_seek_slider.setRange(0, 10000)
+        self.preview_seek_slider.setMinimumWidth(180)
+        self.preview_seek_slider.setToolTip("迷你播放器：拖动调整播放位置")
+        self.preview_seek_slider.setStyleSheet("""
+            QSlider::groove:horizontal { height: 5px; background: #2b3040; border-radius: 2px; }
+            QSlider::sub-page:horizontal { background: #89b4fa; border-radius: 2px; }
+            QSlider::handle:horizontal { background: #ffffff; width: 12px; margin: -4px 0; border-radius: 6px; }
+        """)
+        self.preview_seek_slider.sliderMoved.connect(self._on_preview_seek_slider_moved)
+        self.preview_seek_slider.sliderReleased.connect(self._on_preview_seek_slider_released)
+        transport_row.addWidget(self.preview_seek_slider, stretch=1)
+        self.btn_prev_project = QPushButton("上个视频")
+        self.btn_prev_project.setFixedSize(72, 28)
+        self.btn_prev_project.setToolTip("切换到当前工程文件夹里的上一个工程 / Alt+Left")
+        self.btn_prev_project.setStyleSheet("background-color: #313244; color: #cdd6f4; font-weight: bold; border-radius: 5px;")
+        self.btn_prev_project.clicked.connect(lambda: self.switch_sibling_project(-1))
+        self.btn_next_project = QPushButton("下个视频")
+        self.btn_next_project.setFixedSize(72, 28)
+        self.btn_next_project.setToolTip("切换到当前工程文件夹里的下一个工程 / Alt+Right")
+        self.btn_next_project.setStyleSheet("background-color: #89b4fa; color: #11111b; font-weight: bold; border-radius: 5px;")
+        self.btn_next_project.clicked.connect(lambda: self.switch_sibling_project(1))
+        transport_row.addWidget(self.btn_prev_project)
+        transport_row.addWidget(self.btn_next_project)
+        self.btn_add_text = QPushButton("+ 文字"); self.btn_add_text.setFixedSize(66, 28); self.btn_add_text.setToolTip("在当前时间加文字"); self.btn_add_text.setStyleSheet("background-color: #89b4fa; color: #11111b; font-weight: bold; border-radius: 5px;"); self.btn_add_text.clicked.connect(self.add_manual_text)
+        self.chk_safe_area = QCheckBox("安全框"); self.chk_safe_area.setChecked(False); self.chk_safe_area.setStyleSheet("color: #a6e3a1; font-weight: bold;"); self.chk_safe_area.stateChanged.connect(self.toggle_safe_area)
+        self.btn_add_text.setVisible(False)
+        self.chk_timeline_visible = QCheckBox("时间线")
+        self.chk_timeline_visible.setChecked(False)
+        self.chk_timeline_visible.setStyleSheet("color: #cdd6f4; font-weight: bold;")
+        self.chk_timeline_visible.stateChanged.connect(lambda state: self.set_timeline_visible(state == Qt.CheckState.Checked.value))
+        self.chk_loop_playback = QCheckBox("循环")
+        self.chk_loop_playback.setChecked(True)
+        self.chk_loop_playback.setToolTip("播放到工程结尾后自动回到开头")
+        self.chk_loop_playback.setStyleSheet("color: #f9e2af; font-weight: bold;")
+        transport_row.addWidget(self.btn_add_text); transport_row.addWidget(self.chk_safe_area); transport_row.addWidget(self.chk_timeline_visible); transport_row.addWidget(self.chk_loop_playback)
+        controls_layout.addLayout(transport_row)
+
+        view_row = QHBoxLayout()
+        view_row.setSpacing(6)
+        self.lbl_timeline_zoom_title = QLabel("TIMELINE")
+        self.lbl_timeline_zoom_title.setStyleSheet("color: #6c7086; font-family: Consolas; font-size: 10px; font-weight: bold;")
+        view_row.addWidget(self.lbl_timeline_zoom_title)
+        self.btn_zoom_out = QPushButton("−"); self.btn_zoom_out.setFixedSize(28, 26); self.btn_zoom_out.setToolTip("缩小时间线"); self.btn_zoom_out.setStyleSheet("background-color: #313244; color: #cdd6f4; font-weight: bold; border-radius: 5px;"); self.btn_zoom_out.clicked.connect(lambda: self.adjust_timeline_zoom(0.8)); view_row.addWidget(self.btn_zoom_out)
+        self.lbl_zoom = QLabel("50 px/s"); self.lbl_zoom.setFixedWidth(62); self.lbl_zoom.setAlignment(Qt.AlignmentFlag.AlignCenter); self.lbl_zoom.setStyleSheet("font-family: Consolas; color: #a6adc8; font-size: 11px;")
+        view_row.addWidget(self.lbl_zoom)
+        self.btn_zoom_in = QPushButton("+"); self.btn_zoom_in.setFixedSize(28, 26); self.btn_zoom_in.setToolTip("放大时间线"); self.btn_zoom_in.setStyleSheet("background-color: #313244; color: #cdd6f4; font-weight: bold; border-radius: 5px;"); self.btn_zoom_in.clicked.connect(lambda: self.adjust_timeline_zoom(1.25)); view_row.addWidget(self.btn_zoom_in)
+        view_row.addSpacing(10)
+        self.lbl_preview_zoom_title = QLabel("CANVAS")
+        self.lbl_preview_zoom_title.setStyleSheet("color: #6c7086; font-family: Consolas; font-size: 10px; font-weight: bold;")
+        self.lbl_preview_zoom_title.setToolTip("空白拖拽平移，滚轮缩放，Ctrl+0 重置")
+        view_row.addWidget(self.lbl_preview_zoom_title)
+        self.btn_preview_zoom_out = QPushButton("−"); self.btn_preview_zoom_out.setFixedSize(28, 26); self.btn_preview_zoom_out.setToolTip("缩小监看预览 Ctrl+-"); self.btn_preview_zoom_out.setStyleSheet("background-color: #313244; color: #cdd6f4; font-weight: bold; border-radius: 5px;"); self.btn_preview_zoom_out.clicked.connect(lambda: self.adjust_preview_zoom(-1)); view_row.addWidget(self.btn_preview_zoom_out)
+        self.lbl_preview_zoom = QLabel("100%"); self.lbl_preview_zoom.setFixedWidth(48); self.lbl_preview_zoom.setAlignment(Qt.AlignmentFlag.AlignCenter); self.lbl_preview_zoom.setStyleSheet("font-family: Consolas; color: #f9e2af; font-size: 11px;")
+        view_row.addWidget(self.lbl_preview_zoom)
+        self.btn_preview_zoom_in = QPushButton("+"); self.btn_preview_zoom_in.setFixedSize(28, 26); self.btn_preview_zoom_in.setToolTip("放大监看预览 Ctrl++"); self.btn_preview_zoom_in.setStyleSheet("background-color: #313244; color: #cdd6f4; font-weight: bold; border-radius: 5px;"); self.btn_preview_zoom_in.clicked.connect(lambda: self.adjust_preview_zoom(1)); view_row.addWidget(self.btn_preview_zoom_in)
+        self.btn_preview_reset = QPushButton("100"); self.btn_preview_reset.setFixedSize(38, 26); self.btn_preview_reset.setToolTip("重置监看视窗 Ctrl+0"); self.btn_preview_reset.setStyleSheet("background-color: #313244; color: #a6e3a1; font-family: Consolas; font-weight: bold; border-radius: 5px;"); self.btn_preview_reset.clicked.connect(self.reset_preview_view); view_row.addWidget(self.btn_preview_reset)
+        view_row.addStretch()
+        controls_layout.addLayout(view_row)
+        center_layout.addWidget(controls_panel)
+
+        self.edit_status_strip = QFrame()
+        self.edit_status_strip.setStyleSheet("QFrame { background-color: #11131f; border: 1px solid #25283a; border-radius: 8px; } QLabel { border: none; }")
+        edit_status_layout = QHBoxLayout(self.edit_status_strip)
+        edit_status_layout.setContentsMargins(10, 5, 10, 5)
+        self.lbl_selected_status = QLabel("未选中片段")
+        self.lbl_selected_status.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        self.lbl_edit_health = QLabel("Ready")
+        self.lbl_edit_health.setStyleSheet("color: #a6e3a1; font-family: Consolas; font-size: 11px;")
+        edit_status_layout.addWidget(self.lbl_selected_status, stretch=1)
+        edit_status_layout.addWidget(self.lbl_edit_health)
+        center_layout.addWidget(self.edit_status_strip)
 
         # ================= 3. 右侧面板 =================
-        right_panel = QFrame(); right_panel.setStyleSheet("background-color: #181825; border-radius: 8px;"); right_layout = QVBoxLayout(right_panel)
-        self.tabs = QTabWidget(); self.tabs.setStyleSheet("QTabBar::tab:selected { background: #313244; color: #cdd6f4; font-weight: bold;}")
-        tab_subs = QWidget(); subs_layout = QVBoxLayout(tab_subs); subs_scroll = QScrollArea(); subs_scroll.setWidgetResizable(True); subs_scroll.setStyleSheet("QScrollArea { border: none; background-color: transparent; }")
+        right_panel = QFrame(); right_panel.setStyleSheet("""
+            QFrame {
+                background-color: #151821;
+                border-left: 1px solid #282d3c;
+                border-radius: 0px;
+            }
+            QLabel { color: #dce3f4; }
+        """); right_layout = QVBoxLayout(right_panel)
+        right_layout.setContentsMargins(12, 10, 12, 10)
+        right_layout.setSpacing(8)
+        right_header = QHBoxLayout()
+        right_header.setSpacing(8)
+        self.right_panel_title = QLabel("参数")
+        self.right_panel_title.setStyleSheet("font-size: 15px; font-weight: 900; color: #ffffff;")
+        self.btn_right_close = QPushButton("收起")
+        self.btn_right_close.setFixedSize(58, 28)
+        self.btn_right_close.setToolTip("收起右侧参数栏")
+        self.btn_right_close.setStyleSheet("QPushButton { background-color: #252a3a; color: #dce3f4; border: 1px solid #3a425a; border-radius: 7px; font-size: 12px; font-weight: 800; } QPushButton:hover { background-color: #30384f; }")
+        self.btn_right_close.clicked.connect(lambda: self.set_right_sidebar_visible(False))
+        right_header.addWidget(self.right_panel_title)
+        right_header.addStretch()
+        self.btn_right_close.setVisible(False)
+        right_layout.addLayout(right_header)
+        self.tabs = QTabWidget(); self.tabs.setStyleSheet("""
+            QTabWidget::pane { border: none; background: transparent; }
+            QTabBar::tab {
+                background: transparent;
+                color: #a6adc8;
+                border: none;
+                padding: 7px 12px;
+                font-weight: 700;
+            }
+            QTabBar::tab:selected {
+                background: #262b3b;
+                color: #ffffff;
+                border-radius: 7px;
+            }
+        """)
+        self.tabs.currentChanged.connect(self._on_right_tab_changed)
+        tab_subs = QWidget(); subs_layout = QVBoxLayout(tab_subs); subs_scroll = QScrollArea(); subs_scroll.setWidgetResizable(True); subs_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff); subs_scroll.setStyleSheet("QScrollArea { border: none; background-color: transparent; }")
         self.scroll_content = QWidget(); self.scroll_layout = QVBoxLayout(self.scroll_content); self.scroll_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.scroll_layout.setSpacing(10); self.scroll_layout.setContentsMargins(5, 5, 5, 5)
         subs_scroll.setWidget(self.scroll_content); subs_layout.addWidget(subs_scroll)
         self.insp_stack = QStackedWidget()
         
         def create_slider_spinbox(layout, label, min_v, max_v, default_v, callback, is_float=False):
-            row = QHBoxLayout(); row.addWidget(QLabel(label)); slider = NoScrollSlider(Qt.Orientation.Horizontal)
+            row = QHBoxLayout()
+            row.setSpacing(8)
+            lbl = QLabel(label)
+            lbl.setStyleSheet("font-size: 12px; color: #cdd6f4;")
+            row.addWidget(lbl)
+            slider = NoScrollSlider(Qt.Orientation.Horizontal)
             if is_float:
                 slider.setRange(int(min_v*100), int(max_v*100)); spinbox = ProScrubDoubleSpinBox(); spinbox.setRange(min_v, max_v); spinbox.setSingleStep(0.05); spinbox.setLocale(self.eng_locale)
                 spinbox.setValue(float(default_v)); slider.setValue(int(default_v*100))
@@ -454,7 +1625,7 @@ class EditView(QWidget):
                 slider.setRange(min_v, max_v); spinbox = ProScrubSpinBox(); spinbox.setRange(min_v, max_v)
                 spinbox.setValue(int(default_v)); slider.setValue(int(default_v))
                 slider.valueChanged.connect(spinbox.setValue); spinbox.valueChanged.connect(slider.setValue)
-            spinbox.setStyleSheet("background: #25262b; border: 1px solid #313244; color: white; padding: 2px 5px; border-radius: 3px;"); spinbox.setFixedWidth(80); row.setSpacing(15); spinbox.valueChanged.connect(lambda v: callback())
+            spinbox.setStyleSheet("background: #111522; border: 1px solid #30384d; color: white; padding: 2px 5px; border-radius: 5px; font-size: 12px;"); spinbox.setFixedWidth(58); spinbox.valueChanged.connect(lambda v: callback())
             row.addWidget(slider); row.addWidget(spinbox); layout.addLayout(row)
             return slider, spinbox
 
@@ -462,26 +1633,45 @@ class EditView(QWidget):
             frame = QFrame()
             frame.setObjectName("inspectorSection")
             frame.setStyleSheet(
-                f"QFrame#inspectorSection {{ background-color: #1b1d31; border: 1px solid #313244; border-radius: 10px; }}"
-                f"QLabel[role='section_title'] {{ color: {accent}; font-weight: 700; font-size: 13px; padding: 2px 0; }}"
+                f"QFrame#inspectorSection {{ background-color: #1a1d2b; border: 1px solid #2d3548; border-radius: 8px; }}"
+                f"QLabel[role='section_title'] {{ color: {accent}; font-weight: 800; font-size: 12px; padding: 0; }}"
             )
             outer = QVBoxLayout(frame)
-            outer.setContentsMargins(12, 10, 12, 10)
-            outer.setSpacing(8)
+            outer.setContentsMargins(9, 8, 9, 8)
+            outer.setSpacing(6)
             title_label = QLabel(title)
             title_label.setProperty("role", "section_title")
             outer.addWidget(title_label)
             return frame, outer
 
         page_empty = QWidget(); QVBoxLayout(page_empty).addWidget(QLabel("没有选中任何片段\n\n请在时间线上点击以查看属性\n\n提示: 右侧已改成侧边分类，不用一直往下滑", alignment=Qt.AlignmentFlag.AlignCenter, styleSheet="color: gray;"))
-        insp_scroll = QScrollArea(); insp_scroll.setWidgetResizable(True); insp_scroll.setStyleSheet("QScrollArea { border: none; background-color: transparent; }"); page_sub = QWidget(); sub_layout = QVBoxLayout(page_sub)
+        insp_scroll = QScrollArea(); insp_scroll.setWidgetResizable(True); insp_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff); insp_scroll.setStyleSheet("QScrollArea { border: none; background-color: transparent; }"); page_sub = QWidget(); sub_layout = QVBoxLayout(page_sub)
         sub_layout.setSpacing(10)
 
         def create_nav_btn(text, idx):
             btn = QPushButton(text)
             btn.setCheckable(True)
-            btn.setMinimumHeight(34)
-            btn.setStyleSheet("QPushButton {background-color:#232634; color:#cdd6f4; border:1px solid #313244; border-radius:8px; padding:6px 10px; text-align:left;} QPushButton:checked {background-color:#313244; color:#a6e3a1; border-color:#89b4fa; font-weight:bold;}")
+            btn.setMinimumSize(58, 28)
+            btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #202433;
+                    color: #cdd6f4;
+                    border: 1px solid #31384d;
+                    border-radius: 7px;
+                    padding: 4px 9px;
+                    font-size: 12px;
+                    font-weight: 800;
+                }
+                QPushButton:hover {
+                    background-color: #2a3044;
+                    color: #ffffff;
+                }
+                QPushButton:checked {
+                    background-color: #2d3651;
+                    color: #ffffff;
+                    border-color: #89b4fa;
+                }
+            """)
             btn.clicked.connect(lambda: self._switch_sub_page(idx))
             return btn
 
@@ -490,14 +1680,27 @@ class EditView(QWidget):
         self.btn_del_clip = QPushButton("🗑️ 删除"); self.btn_del_clip.setStyleSheet("background-color: #f38ba8; color: #11111b; font-weight: bold; border-radius: 6px; padding: 6px 10px;"); self.btn_del_clip.clicked.connect(self.delete_current_clip)
         top_ctrl_row.addWidget(self.style_scope_combo, stretch=1); top_ctrl_row.addSpacing(8); top_ctrl_row.addWidget(self.btn_del_clip); sub_layout.addLayout(top_ctrl_row)
 
+        preset_box = QVBoxLayout()
+        preset_box.setSpacing(5)
         preset_row = QHBoxLayout()
+        preset_row.setSpacing(6)
         self.preset_combo = QComboBox(); self.preset_combo.setStyleSheet("background-color: #11111b; color: #cdd6f4; font-weight: bold; border: 1px solid #313244; border-radius: 6px; padding: 6px;")
-        self.btn_apply_preset = QPushButton("✨ 应用"); self.btn_apply_preset.setStyleSheet("background-color: #a6e3a1; color: #11111b; font-weight: bold; border-radius: 6px; padding: 6px 10px;")
-        self.btn_save_preset = QPushButton("💾 存预设"); self.btn_save_preset.setStyleSheet("background-color: #89b4fa; color: #11111b; font-weight: bold; border-radius: 6px; padding: 6px 10px;")
-        self.btn_del_preset = QPushButton("❌"); self.btn_del_preset.setStyleSheet("background-color: #f38ba8; color: #11111b; font-weight: bold; border-radius: 6px; padding: 6px 10px; width: 30px;")
-        preset_row.addWidget(QLabel("🎨 预设库:")); preset_row.addWidget(self.preset_combo, stretch=1); preset_row.addWidget(self.btn_apply_preset); preset_row.addWidget(self.btn_save_preset); preset_row.addWidget(self.btn_del_preset)
-        sub_layout.addLayout(preset_row)
-        self.btn_apply_preset.clicked.connect(self.apply_style_preset); self.btn_save_preset.clicked.connect(self.save_style_preset); self.btn_del_preset.clicked.connect(self.delete_style_preset)
+        self.btn_apply_preset = QPushButton("应用"); self.btn_apply_preset.setFixedHeight(30); self.btn_apply_preset.setStyleSheet("background-color: #a6e3a1; color: #11111b; font-weight: bold; border-radius: 6px; padding: 5px 10px;")
+        self.btn_save_preset = QPushButton("存预设"); self.btn_save_preset.setFixedHeight(30); self.btn_save_preset.setStyleSheet("background-color: #89b4fa; color: #11111b; font-weight: bold; border-radius: 6px; padding: 5px 10px;")
+        self.btn_manage_preset = QPushButton("管理"); self.btn_manage_preset.setFixedHeight(30); self.btn_manage_preset.setStyleSheet("background-color: #313244; color: #cdd6f4; font-weight: bold; border-radius: 6px; padding: 5px 10px;")
+        self.btn_del_preset = QPushButton("×"); self.btn_del_preset.setFixedSize(34, 30); self.btn_del_preset.setStyleSheet("background-color: #f38ba8; color: #11111b; font-weight: bold; border-radius: 6px;")
+        preset_row.addWidget(QLabel("预设库:")); preset_row.addWidget(self.preset_combo, stretch=1)
+        preset_actions = QHBoxLayout()
+        preset_actions.setSpacing(6)
+        preset_actions.addStretch()
+        preset_actions.addWidget(self.btn_apply_preset)
+        preset_actions.addWidget(self.btn_save_preset)
+        preset_actions.addWidget(self.btn_manage_preset)
+        preset_actions.addWidget(self.btn_del_preset)
+        preset_box.addLayout(preset_row)
+        preset_box.addLayout(preset_actions)
+        sub_layout.addLayout(preset_box)
+        self.btn_apply_preset.clicked.connect(self.apply_style_preset); self.btn_save_preset.clicked.connect(self.save_style_preset); self.btn_manage_preset.clicked.connect(self.manage_style_presets); self.btn_del_preset.clicked.connect(self.delete_style_preset)
 
         self.preset_preview_label = QLabel("Text")
         self.preset_preview_label.setMinimumHeight(72)
@@ -505,22 +1708,58 @@ class EditView(QWidget):
         self.preset_preview_label.setWordWrap(True)
         self.preset_preview_label.setStyleSheet("background-color:#11111b; border:1px dashed #45475a; border-radius:10px; color:#ffffff; padding:10px;")
         sub_layout.addWidget(self.preset_preview_label)
+        self.preset_preview_label.setVisible(False)
+        self.preset_preview_web = QWebEngineView()
+        self.preset_preview_web.setMinimumHeight(120)
+        self.preset_preview_web.setMaximumHeight(160)
+        self.preset_preview_web.settings().setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
+        self.preset_preview_web.setStyleSheet("background-color:#11111b; border:1px dashed #45475a; border-radius:10px;")
+        sub_layout.addWidget(self.preset_preview_web)
         self.preset_combo.currentIndexChanged.connect(self._update_preset_preview)
 
-        body_row = QHBoxLayout(); body_row.setSpacing(10)
-        nav_col = QVBoxLayout(); nav_col.setSpacing(6)
+        body_col = QVBoxLayout(); body_col.setSpacing(6); body_col.setContentsMargins(0, 0, 0, 0)
+        nav_scroll = QScrollArea()
+        nav_scroll.setWidgetResizable(True)
+        nav_scroll.setFixedHeight(36)
+        nav_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        nav_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        nav_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        nav_scroll.setStyleSheet("""
+            QScrollArea { background: transparent; border: none; }
+            QScrollBar:horizontal {
+                background: transparent;
+                height: 5px;
+                margin: 0px 6px;
+            }
+            QScrollBar::handle:horizontal {
+                background: #454f6d;
+                border-radius: 2px;
+                min-width: 28px;
+            }
+            QScrollBar::add-line:horizontal,
+            QScrollBar::sub-line:horizontal {
+                width: 0px;
+            }
+        """)
+        nav_widget = QWidget()
+        nav_strip = QHBoxLayout(nav_widget)
+        nav_strip.setContentsMargins(0, 0, 0, 3)
+        nav_strip.setSpacing(5)
         self.sub_page_buttons = []
-        for idx, text_btn in enumerate(["⏱️ 时间", "🔤 字体排版", "🎬 动画效果", "🎨 颜色描边", "🔲 底框阴影"]):
+        for idx, text_btn in enumerate(["时间", "字体", "动画", "颜色", "底框"]):
             btn = create_nav_btn(text_btn, idx)
             self.sub_page_buttons.append(btn)
-            nav_col.addWidget(btn)
-        nav_col.addStretch(); body_row.addLayout(nav_col)
+            nav_strip.addWidget(btn)
+        nav_strip.addStretch()
+        nav_scroll.setWidget(nav_widget)
+        body_col.addWidget(nav_scroll)
+        self.sub_page_nav_scroll = nav_scroll
 
         self.sub_pages = QStackedWidget(); self.sub_pages.setStyleSheet("QStackedWidget { background: transparent; }")
-        body_row.addWidget(self.sub_pages, stretch=1)
-        sub_layout.addLayout(body_row)
+        body_col.addWidget(self.sub_pages, stretch=1)
+        sub_layout.addLayout(body_col)
 
-        page_timing = QWidget(); page_timing_layout = QVBoxLayout(page_timing); page_timing_layout.setSpacing(10)
+        page_timing = QWidget(); page_timing_layout = QVBoxLayout(page_timing); page_timing_layout.setSpacing(6); page_timing_layout.setContentsMargins(0, 0, 0, 0)
         sec_duration, duration_layout = create_section_frame("⏱️ 长度控制 (Duration)", "#f9e2af")
         s_time_row = QHBoxLayout()
         s_time_row.addWidget(QLabel("起点 (s):")); self.sub_start_spin = ProScrubDoubleSpinBox(); self.sub_start_spin.setRange(0, 36000); self.sub_start_spin.setSingleStep(0.1); self.sub_start_spin.setLocale(self.eng_locale); self.sub_start_spin.setStyleSheet("background: #25262b; border: 1px solid #313244; color: white; padding: 2px 5px; border-radius: 3px;"); self.sub_start_spin.valueChanged.connect(self._on_sub_time_change); s_time_row.addWidget(self.sub_start_spin)
@@ -541,8 +1780,8 @@ class EditView(QWidget):
         page_timing_layout.addWidget(sec_mask)
         page_timing_layout.addStretch(); self.sub_pages.addWidget(page_timing)
 
-        page_typo = QWidget(); page_typo_layout = QVBoxLayout(page_typo); page_typo_layout.setSpacing(10)
-        sec_typo, typo_layout = create_section_frame("🔤 字体样式与高级排版 (Typography)", "#a6e3a1")
+        page_typo = QWidget(); page_typo_layout = QVBoxLayout(page_typo); page_typo_layout.setSpacing(6); page_typo_layout.setContentsMargins(0, 0, 0, 0)
+        sec_typo, typo_layout = create_section_frame("字体排版", "#a6e3a1")
         self.font_category_combo = QComboBox(); self.font_category_combo.addItems(["全部字体", "中文优先", "拉丁/英文字体", "等宽字体"]); self.font_category_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.font_category_combo.currentTextChanged.connect(self._set_font_filter); typo_layout.addWidget(self.font_category_combo)
         self.font_category_combo.clear()
         self.font_category_combo.addItems(["全部字体", "商用安全/开源", "系统/待复核", "中文优先", "拉丁/英文字体", "等宽字体", "无衬线", "衬线", "手写/花体", "装饰/标题"])
@@ -583,6 +1822,7 @@ class EditView(QWidget):
         self.font_preview_input.setStyleSheet("background-color: #11111b; color: #cdd6f4; border: 1px solid #313244; border-radius: 6px; padding: 6px 8px;")
         self.font_preview_input.textChanged.connect(self._update_font_preview)
         typo_layout.addWidget(self.font_preview_input)
+        self.font_preview_input.setVisible(False)
         self.font_preview_label = QLabel("Text")
         self.font_preview_label.setMinimumHeight(88)
         self.font_preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -590,8 +1830,9 @@ class EditView(QWidget):
         self.font_preview_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.font_preview_label.setStyleSheet("background-color: #11111b; border: 1px dashed #45475a; border-radius: 8px; color: #ffffff; padding: 12px;")
         typo_layout.addWidget(self.font_preview_label)
+        self.font_preview_label.setVisible(False)
         self.layout_mode_combo = QComboBox(); self.layout_mode_combo.addItems(["标准排版", "智能图文排版", "混合自然排版", "大小对比排版", "三层模板排版", "前后大小叙事排版", "随机重点排版", "左右排开排版", "中轴排比排版"]); self.layout_mode_combo.setStyleSheet("background-color: #313244; padding: 5px; font-weight: bold;"); self.layout_mode_combo.currentTextChanged.connect(self._on_style_change); typo_layout.addWidget(self.layout_mode_combo)
-        self.layout_variant_combo = QComboBox(); self.layout_variant_combo.addItems(["自动变化", "小-大-小", "大-小-混排", "混排-大-小", "中轴结尾分两边", "中轴 1-2-3 排"]); self.layout_variant_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.layout_variant_combo.currentTextChanged.connect(self._on_style_change); typo_layout.addWidget(self.layout_variant_combo)
+        self.layout_variant_combo = QComboBox(); self.layout_variant_combo.addItems(["自动变化", "小-大-小", "大-小-混排", "混排-大-小", "首字母变大叙事", "开头变大叙事", "尾部变大叙事", "中轴结尾分两边", "中轴 1-2-3 排"]); self.layout_variant_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.layout_variant_combo.currentTextChanged.connect(self._on_style_change); typo_layout.addWidget(self.layout_variant_combo)
         self.box_layout_combo = QComboBox(); self.box_layout_combo.addItems(["自适应文字宽度", "固定窗口自动换行"]); self.box_layout_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.box_layout_combo.currentTextChanged.connect(self._on_style_change); typo_layout.addWidget(self.box_layout_combo)
         self.max_lines_slider, self.max_lines_spin = create_slider_spinbox(typo_layout, "标准排版最大行数:", 1, 4, 2, self._on_style_change)
         self.size_slider, self.size_spin = create_slider_spinbox(typo_layout, "字体大小:", 10, 300, 100, self._on_style_change)
@@ -607,9 +1848,9 @@ class EditView(QWidget):
         typo_layout.addWidget(self.btn_reflow_standard)
         page_typo_layout.addWidget(sec_typo); page_typo_layout.addStretch(); self.sub_pages.addWidget(page_typo)
 
-        page_anim = QWidget(); page_anim_layout = QVBoxLayout(page_anim); page_anim_layout.setSpacing(10)
+        page_anim = QWidget(); page_anim_layout = QVBoxLayout(page_anim); page_anim_layout.setSpacing(6); page_anim_layout.setContentsMargins(0, 0, 0, 0)
         sec_anim, anim_layout = create_section_frame("🎬 动态特效 (Animation)", "#f9e2af")
-        self.anim_combo = QComboBox(); self.anim_combo.addItems(["🎉 逐字弹跳 (Pop-in)", "☁️ 柔和淡入 (Fade)", "🌫️ 单词模糊渐入 (Blur Fade)", "▌单词遮罩右移键入", "➡️ 平滑遮罩右移", "⬆️ 电影级向上滚动 (Roll Up)", "💥 远处砸入 (Slam In)", "🔎 慢慢放大出字 (Grow In)", "🧲 词语散开入场 (Scatter In)", "🔤 字字分散入场 (Letter Scatter)", "🎥 朝镜头推进 (Camera Push)", "🧊 3D远近推进 (Depth Push)", "🚫 无动画 (None)"]); self.anim_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.anim_combo.currentTextChanged.connect(self._on_style_change); anim_layout.addWidget(self.anim_combo)
+        self.anim_combo = QComboBox(); self.anim_combo.addItems(["🎉 逐字弹跳 (Pop-in)", "☁️ 柔和淡入 (Fade)", "🌫️ 单词模糊渐入 (Blur Fade)", "▌单词遮罩右移键入", "➡️ 平滑遮罩右移", "⬆️ 电影级向上滚动 (Roll Up)", "💥 远处砸入 (Slam In)", "🔎 慢慢放大出字 (Grow In)", "🧲 词语散开入场 (Scatter In)", "🔤 字字分散入场 (Letter Scatter)", "🎥 朝镜头推进 (Camera Push)", "🧊 3D远近推进 (Depth Push)", "🕊️ 圣息慢显 (Holy Breath)", "🚫 无动画 (None)"]); self.anim_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.anim_combo.currentTextChanged.connect(self._on_style_change); anim_layout.addWidget(self.anim_combo)
         self.font_motion_combo = QComboBox(); self.font_motion_combo.addItems(["字体动画: 无效果", "字体动画: 波浪感", "字体动画: 水波立体流动", "字体动画: 慢呼吸放大", "字体动画: 词语慢慢分散", "字体动画: 忽大忽小跳动"]); self.font_motion_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.font_motion_combo.currentTextChanged.connect(self._on_style_change); anim_layout.addWidget(self.font_motion_combo)
         self.hl_motion_combo = QComboBox(); self.hl_motion_combo.addItems(["当前词动画: 稳定贴合", "当前词动画: 放大贴合", "当前词动画: 放大并挤开两边"]); self.hl_motion_combo.setStyleSheet("background-color: #313244; padding: 5px; color: #a6e3a1;"); self.hl_motion_combo.currentTextChanged.connect(self._on_style_change); anim_layout.addWidget(self.hl_motion_combo)
         self.pop_speed_slider, self.pop_speed_spin = create_slider_spinbox(anim_layout, "动画速度(秒):", 0.05, 2.0, 0.18, self._on_style_change, is_float=True)
@@ -617,7 +1858,7 @@ class EditView(QWidget):
         self.inactive_alpha_slider, self.inactive_alpha_spin = create_slider_spinbox(anim_layout, "未读文字透明:", 0, 100, 100, self._on_style_change)
         page_anim_layout.addWidget(sec_anim); page_anim_layout.addStretch(); self.sub_pages.addWidget(page_anim)
 
-        page_fx = QWidget(); page_fx_layout = QVBoxLayout(page_fx); page_fx_layout.setSpacing(10)
+        page_fx = QWidget(); page_fx_layout = QVBoxLayout(page_fx); page_fx_layout.setSpacing(6); page_fx_layout.setContentsMargins(0, 0, 0, 0)
         sec_fx, fx_layout = create_section_frame("🎨 颜色与特效 (Effects)", "#f5c2e7")
         hl_row = QHBoxLayout()
         self.chk_use_hl = QCheckBox("🌟 启用高亮"); self.chk_use_hl.setChecked(True); self.chk_use_hl.stateChanged.connect(self._on_style_change); hl_row.addWidget(self.chk_use_hl)
@@ -634,7 +1875,7 @@ class EditView(QWidget):
         self.stroke_soft_slider, self.stroke_soft_spin = create_slider_spinbox(stroke_layout, "描边柔边 %:", 0, 100, 0, self._on_style_change)
         page_fx_layout.addWidget(sec_stroke); page_fx_layout.addStretch(); self.sub_pages.addWidget(page_fx)
 
-        page_bg = QWidget(); page_bg_layout = QVBoxLayout(page_bg); page_bg_layout.setSpacing(10)
+        page_bg = QWidget(); page_bg_layout = QVBoxLayout(page_bg); page_bg_layout.setSpacing(6); page_bg_layout.setContentsMargins(0, 0, 0, 0)
         sec_shadow, shadow_layout = create_section_frame("🕳️ 硬阴影 (Drop Shadow)", "#cba6f7")
         self.btn_color_sh = QPushButton("⬛ 阴影颜色"); self.btn_color_sh.setStyleSheet("background-color: #313244; padding: 5px;"); self.btn_color_sh.clicked.connect(lambda: self._pick_color("sh")); shadow_layout.addWidget(self.btn_color_sh)
         self.sh_x_slider, self.sh_x_spin = create_slider_spinbox(shadow_layout, "X 偏移:", -50, 50, 5, self._on_style_change)
@@ -644,7 +1885,7 @@ class EditView(QWidget):
         page_bg_layout.addWidget(sec_shadow)
         sec_bg, bg_layout = create_section_frame("🔲 底框与贴纸 (Background)", "#f9e2af")
         self.bg_mode_combo = QComboBox()
-        self.bg_mode_combo.addItems(["🚫 无底框 (纯白字默认)", "🟥 逐字单点底盒 (Tape)", "🌊 KTV渐变底盒 (Sweep)", "🔲 全局大底框 (Block)", "🧱 全部框架 (Full Frame)"])
+        self.bg_mode_combo.addItems(["🚫 无底框 (纯白字默认)", "🟥 逐字单点底盒 (Tape)", "🌊 KTV渐变底盒 (Sweep)", "🔲 全局大底框 (Block)", "🧱 全部框架 (Full Frame)", "🌙 圣洁柔光电影玻璃框 (Cinematic Glass)"])
         self.bg_mode_combo.setStyleSheet("background-color: #313244; padding: 5px; font-weight: bold;")
         self.bg_mode_combo.currentTextChanged.connect(self._on_style_change)
         bg_layout.addWidget(self.bg_mode_combo)
@@ -678,50 +1919,799 @@ class EditView(QWidget):
         v_time_row.addWidget(QLabel("终点 (s):")); self.v_end_spin = ProScrubDoubleSpinBox(); self.v_end_spin.setRange(0, 36000); self.v_end_spin.setLocale(self.eng_locale); self.v_end_spin.setStyleSheet("background: #25262b; border: 1px solid #313244; color: white; padding: 2px 5px; border-radius: 3px;"); self.v_end_spin.valueChanged.connect(self._on_v_time_change); v_time_row.addWidget(self.v_end_spin)
         vid_layout.addLayout(v_time_row)
         
-        self.res_combo = QComboBox(); self.res_combo.addItems(["自动检测 (自动跟随)", "竖屏 1080x1920", "横屏 1920x1080", "正方 1080x1080"]); self.res_combo.setStyleSheet("background-color: #313244; padding: 5px; color: #f9e2af; margin-top: 10px;"); self.res_combo.currentTextChanged.connect(self.on_resolution_changed); vid_layout.addWidget(QLabel("📐 全局比例:")); vid_layout.addWidget(self.res_combo)
+        self.res_combo = QComboBox(); self.res_combo.addItems(OUTPUT_RESOLUTION_OPTIONS); self.res_combo.setCurrentText(get_output_resolution()); self.res_combo.setStyleSheet("background-color: #313244; padding: 5px; color: #f9e2af; margin-top: 10px;"); self.res_combo.currentTextChanged.connect(self.on_resolution_changed); vid_layout.addWidget(QLabel("📐 画布分辨率:")); vid_layout.addWidget(self.res_combo)
         vid_layout.addWidget(QLabel("🎞️ 画面设置", alignment=Qt.AlignmentFlag.AlignCenter)); self.v_scale_slider, self.v_scale_spin = create_slider_spinbox(vid_layout, "画面缩放 %:", 10, 300, 100, self._on_vid_prop_change); self.v_vol_slider, self.v_vol_spin = create_slider_spinbox(vid_layout, "原声音量 %:", 0, 100, 100, self._on_vid_prop_change)
         vid_layout.addStretch()
 
         page_aud = QWidget(); aud_layout = QVBoxLayout(page_aud); aud_layout.addWidget(QLabel("🎵 配音音量设置", alignment=Qt.AlignmentFlag.AlignCenter)); self.a_vol_slider, self.a_vol_spin = create_slider_spinbox(aud_layout, "配音音量 %:", 0, 100, 100, self._on_aud_prop_change); aud_layout.addStretch()
 
-        self.insp_stack.addWidget(page_empty); self.insp_stack.addWidget(insp_scroll); self.insp_stack.addWidget(page_vid); self.insp_stack.addWidget(page_aud)
-        self.tabs.addTab(tab_subs, "📝 精修"); self.tabs.addTab(self.insp_stack, "🎛️ 检查器"); right_layout.addWidget(self.tabs)
+        page_signature = QWidget(); signature_layout = QVBoxLayout(page_signature); signature_layout.setSpacing(10)
+        sec_signature, sig_layout = create_section_frame("✒️ 全局署名 (Signature)", "#f9e2af")
+        sig_template_row = QHBoxLayout()
+        self.signature_template_combo = QComboBox()
+        self.signature_template_combo.setStyleSheet("background-color: #11111b; color: #cdd6f4; border: 1px solid #313244; border-radius: 6px; padding: 6px;")
+        self.btn_signature_apply_template = QPushButton("应用模板")
+        self.btn_signature_apply_template.setStyleSheet("background-color: #a6e3a1; color: #11111b; font-weight: bold; border-radius: 6px; padding: 7px 10px;")
+        self.btn_signature_apply_template.clicked.connect(self.apply_signature_preset)
+        self.btn_signature_save_template = QPushButton("存模板")
+        self.btn_signature_save_template.setStyleSheet("background-color: #89b4fa; color: #11111b; font-weight: bold; border-radius: 6px; padding: 7px 10px;")
+        self.btn_signature_save_template.clicked.connect(self.save_signature_preset)
+        self.btn_signature_delete_template = QPushButton("删")
+        self.btn_signature_delete_template.setStyleSheet("background-color: #f38ba8; color: #11111b; font-weight: bold; border-radius: 6px; padding: 7px 10px;")
+        self.btn_signature_delete_template.clicked.connect(self.delete_signature_preset)
+        sig_template_row.addWidget(self.signature_template_combo, stretch=1)
+        sig_template_row.addWidget(self.btn_signature_apply_template)
+        sig_template_row.addWidget(self.btn_signature_save_template)
+        sig_template_row.addWidget(self.btn_signature_delete_template)
+        sig_layout.addLayout(sig_template_row)
+        self.chk_signature_enabled = QCheckBox("启用署名")
+        self.chk_signature_enabled.setStyleSheet("color: #f9e2af; font-weight: bold;")
+        self.chk_signature_enabled.stateChanged.connect(self._on_signature_change)
+        sig_layout.addWidget(self.chk_signature_enabled)
+        self.signature_text_input = QLineEdit()
+        self.signature_text_input.setPlaceholderText("输入署名，例如 @Name / Studio")
+        self.signature_text_input.setStyleSheet("background-color: #11111b; color: #cdd6f4; border: 1px solid #313244; border-radius: 6px; padding: 7px 9px;")
+        self.signature_text_input.textChanged.connect(self._on_signature_change)
+        sig_layout.addWidget(self.signature_text_input)
+        self.signature_position_combo = QComboBox()
+        self.signature_position_combo.addItems(["右上角", "左上角", "右下角", "左下角", "顶部居中", "底部居中", "自定义位置"])
+        self.signature_position_combo.setStyleSheet("background-color: #313244; padding: 6px; color: white; border-radius: 5px;")
+        self.signature_position_combo.currentTextChanged.connect(self._on_signature_change)
+        sig_layout.addWidget(self.signature_position_combo)
+        self.signature_size_slider, self.signature_size_spin = create_slider_spinbox(sig_layout, "署名大小:", 12, 300, 42, self._on_signature_change)
+        self.signature_margin_x_slider, self.signature_margin_x_spin = create_slider_spinbox(sig_layout, "左右边距 %:", 0, 30, 5, self._on_signature_change, is_float=True)
+        self.signature_margin_y_slider, self.signature_margin_y_spin = create_slider_spinbox(sig_layout, "上下边距 %:", 0, 30, 4, self._on_signature_change, is_float=True)
+        self.signature_bg_combo = QComboBox()
+        self.signature_bg_combo.addItems(["柔光玻璃背景", "纯色底框", "无背景"])
+        self.signature_bg_combo.setStyleSheet("background-color: #313244; padding: 6px; color: white; border-radius: 5px;")
+        self.signature_bg_combo.currentTextChanged.connect(self._on_signature_change)
+        sig_layout.addWidget(self.signature_bg_combo)
+        sig_color_row = QHBoxLayout()
+        self.btn_signature_text_color = QPushButton("文字色")
+        self.btn_signature_text_color.setStyleSheet("background-color: #313244; color: #ffffff; font-weight: bold; border-radius: 6px; padding: 7px 10px;")
+        self.btn_signature_text_color.clicked.connect(lambda: self._pick_signature_color("text"))
+        self.btn_signature_bg_color = QPushButton("背景色")
+        self.btn_signature_bg_color.setStyleSheet("background-color: #313244; color: #ffffff; font-weight: bold; border-radius: 6px; padding: 7px 10px;")
+        self.btn_signature_bg_color.clicked.connect(lambda: self._pick_signature_color("bg"))
+        sig_color_row.addWidget(self.btn_signature_text_color)
+        sig_color_row.addWidget(self.btn_signature_bg_color)
+        sig_layout.addLayout(sig_color_row)
+        self.signature_bg_alpha_slider, self.signature_bg_alpha_spin = create_slider_spinbox(sig_layout, "背景透明度 %:", 0, 100, 45, self._on_signature_change)
+        self.signature_bg_radius_slider, self.signature_bg_radius_spin = create_slider_spinbox(sig_layout, "背景圆角:", 0, 80, 26, self._on_signature_change)
+        self.signature_bg_padding_slider, self.signature_bg_padding_spin = create_slider_spinbox(sig_layout, "背景内边距:", 0, 80, 10, self._on_signature_change)
+        sig_btn_row = QHBoxLayout()
+        self.btn_signature_from_current = QPushButton("用当前字幕做署名模板")
+        self.btn_signature_from_current.setStyleSheet("background-color: #89b4fa; color: #11111b; font-weight: bold; border-radius: 6px; padding: 7px 10px;")
+        self.btn_signature_from_current.clicked.connect(self.capture_signature_template)
+        self.btn_signature_default = QPushButton("恢复右上角默认")
+        self.btn_signature_default.setStyleSheet("background-color: #313244; color: #f9e2af; font-weight: bold; border-radius: 6px; padding: 7px 10px;")
+        self.btn_signature_default.clicked.connect(self.reset_signature_template)
+        sig_btn_row.addWidget(self.btn_signature_from_current)
+        sig_btn_row.addWidget(self.btn_signature_default)
+        sig_layout.addLayout(sig_btn_row)
+        signature_layout.addWidget(sec_signature)
+        signature_layout.addStretch()
 
-        timeline_outer = QFrame(); timeline_outer.setStyleSheet("background-color: #1e1e2e; border-radius: 8px;"); timeline_outer.setMinimumHeight(HEADER_H + TRACK_H * 6 + 18); tl_outer_layout = QHBoxLayout(timeline_outer); tl_outer_layout.setContentsMargins(0,0,0,0); tl_outer_layout.setSpacing(0)
-        self.tl_header = TimelineHeader(controller=self); tl_outer_layout.addWidget(self.tl_header)
-        self.timeline_widget = AdvancedTimeline(controller=self); tl_outer_layout.addWidget(self.timeline_widget, stretch=1)
-        
+        self.insp_stack.addWidget(page_empty); self.insp_stack.addWidget(insp_scroll); self.insp_stack.addWidget(page_vid); self.insp_stack.addWidget(page_aud)
+        self.signature_panel = page_signature
+        self.tabs.addTab(tab_subs, "精修"); self.tabs.addTab(self.insp_stack, "画面"); self.tabs.addTab(page_signature, "署名"); right_layout.addWidget(self.tabs)
+
+        timeline_outer = QFrame(); timeline_outer.setStyleSheet("background-color: #171a23; border: none; border-top: 1px solid #2b3040; border-radius: 0px;"); timeline_outer.setMinimumHeight(HEADER_H + TRACK_H * TRACK_COUNT + 38); tl_outer_layout = QVBoxLayout(timeline_outer); tl_outer_layout.setContentsMargins(0,0,0,0); tl_outer_layout.setSpacing(0)
+        timeline_bar = QFrame(); timeline_bar.setStyleSheet("QFrame { background-color: #10131b; border: none; border-bottom: 1px solid #2b3040; border-radius: 0px; } QLabel { border: none; }")
+        timeline_bar_layout = QHBoxLayout(timeline_bar); timeline_bar_layout.setContentsMargins(12, 5, 12, 5); timeline_bar_layout.setSpacing(8)
+        self.lbl_timeline_title = QLabel("TIMELINE")
+        self.lbl_timeline_title.setStyleSheet("color: #f9e2af; font-size: 11px; font-weight: 800; letter-spacing: 1px;")
+        self.lbl_timeline_summary = QLabel("0 clips")
+        self.lbl_timeline_summary.setStyleSheet("color: #a6adc8; font-family: Consolas; font-size: 11px;")
+        self.btn_timeline_snap = QPushButton("SNAP ON")
+        self.btn_timeline_snap.setCheckable(True)
+        self.btn_timeline_snap.setChecked(True)
+        self.btn_timeline_snap.setFixedSize(78, 24)
+        self.btn_timeline_snap.setStyleSheet("QPushButton { background-color: #313244; color: #a6e3a1; border: 1px solid #45475a; border-radius: 5px; font-family: Consolas; font-size: 10px; font-weight: bold; } QPushButton:!checked { color: #a6adc8; }")
+        self.btn_timeline_snap.clicked.connect(self.set_timeline_snap_enabled)
+        timeline_bar_layout.addWidget(self.lbl_timeline_title)
+        timeline_bar_layout.addWidget(self.lbl_timeline_summary, stretch=1)
+        self.btn_timeline_compact = QPushButton("COMPACT")
+        self.btn_timeline_compact.setFixedSize(82, 24)
+        self.btn_timeline_compact.setToolTip("压缩时间线，给画布更多空间")
+        self.btn_timeline_compact.setStyleSheet("QPushButton { background-color: #252a3a; color: #cdd6f4; border: 1px solid #45475a; border-radius: 5px; font-family: Consolas; font-size: 10px; font-weight: bold; }")
+        self.btn_timeline_compact.clicked.connect(lambda: self.set_timeline_height_preset("compact"))
+        self.btn_timeline_large = QPushButton("LARGE")
+        self.btn_timeline_large.setFixedSize(68, 24)
+        self.btn_timeline_large.setToolTip("放大时间线，方便精修剪辑")
+        self.btn_timeline_large.setStyleSheet("QPushButton { background-color: #252a3a; color: #cdd6f4; border: 1px solid #45475a; border-radius: 5px; font-family: Consolas; font-size: 10px; font-weight: bold; }")
+        self.btn_timeline_large.clicked.connect(lambda: self.set_timeline_height_preset("large"))
+        self.btn_timeline_hide = QPushButton("HIDE")
+        self.btn_timeline_hide.setFixedSize(58, 24)
+        self.btn_timeline_hide.setToolTip("隐藏时间线")
+        self.btn_timeline_hide.setStyleSheet("QPushButton { background-color: #252a3a; color: #f9e2af; border: 1px solid #45475a; border-radius: 5px; font-family: Consolas; font-size: 10px; font-weight: bold; }")
+        self.btn_timeline_hide.clicked.connect(lambda: self.set_timeline_visible(False))
+        timeline_bar_layout.addWidget(self.btn_timeline_compact)
+        timeline_bar_layout.addWidget(self.btn_timeline_large)
+        timeline_bar_layout.addWidget(self.btn_timeline_hide)
+        timeline_bar_layout.addWidget(self.btn_timeline_snap)
+        tl_outer_layout.addWidget(timeline_bar)
+        timeline_body = QWidget(); timeline_body_layout = QHBoxLayout(timeline_body); timeline_body_layout.setContentsMargins(0,0,0,0); timeline_body_layout.setSpacing(0)
+        self.tl_header = TimelineHeader(controller=self); timeline_body_layout.addWidget(self.tl_header)
+        self.timeline_widget = AdvancedTimeline(controller=self); timeline_body_layout.addWidget(self.timeline_widget, stretch=1)
+        tl_outer_layout.addWidget(timeline_body, stretch=1)
+
+        self.main_v_splitter = main_v_splitter
+        self.top_h_splitter = top_h_splitter
+        self.timeline_outer = timeline_outer
+        self.center_panel = center_panel
+        left_shell = QFrame()
+        left_shell.setStyleSheet("QFrame { background-color: #181b24; border-right: 1px solid #2b3040; }")
+        left_shell_layout = QHBoxLayout(left_shell)
+        left_shell_layout.setContentsMargins(0, 0, 0, 0)
+        left_shell_layout.setSpacing(0)
+
+        side_rail = QFrame()
+        side_rail.setFixedWidth(68)
+        side_rail.setStyleSheet("QFrame { background-color: #11141d; border-right: 1px solid #2b3040; }")
+        side_rail_layout = QVBoxLayout(side_rail)
+        side_rail_layout.setContentsMargins(7, 10, 7, 10)
+        side_rail_layout.setSpacing(6)
+        self.side_nav_buttons = []
+
+        def make_side_nav(text, tip, callback=None, active=False):
+            btn = QPushButton(text)
+            btn.setFixedSize(54, 54)
+            btn.setToolTip(tip)
+            btn.setCheckable(True)
+            btn.setStyleSheet("""
+                QPushButton {
+                    background: transparent;
+                    color: #aeb6c8;
+                    border: none;
+                    border-radius: 10px;
+                    font-size: 11px;
+                    font-weight: 800;
+                    text-align: center;
+                }
+                QPushButton:hover { background: #202433; color: #ffffff; }
+                QPushButton:checked { background: #242b3f; color: #ffffff; border: 1px solid #4f5b7a; }
+            """)
+            def on_clicked():
+                for other in self.side_nav_buttons:
+                    other.setChecked(False)
+                btn.setChecked(True)
+                if callback:
+                    callback()
+            btn.clicked.connect(on_clicked)
+            self.side_nav_buttons.append(btn)
+            side_rail_layout.addWidget(btn)
+            if active:
+                btn.setChecked(True)
+            return btn
+
+        self.btn_side_edit_workspace = make_side_nav("⌂\n精修", "字幕、素材与导入", lambda: self.request_parent_workspace("edit"), active=True)
+        side_rail_layout.addStretch()
+        make_side_nav("⚙\n设置", "前往设置界面", lambda: self.parent_window().switch_room(4) if self.parent_window() and hasattr(self.parent_window(), "switch_room") else self.manual_save())
+
         left_scroll = QScrollArea()
         left_scroll.setWidgetResizable(True)
         left_scroll.setFrameShape(QFrame.Shape.NoFrame)
         left_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         left_scroll.setMinimumWidth(220)
-        left_scroll.setStyleSheet("QScrollArea { background-color: #181825; border: none; border-radius: 8px; }")
+        left_scroll.setStyleSheet("QScrollArea { background-color: #181b24; border: none; }")
         left_scroll.setWidget(left_panel)
-        center_panel.setMinimumWidth(320)
-        right_panel.setMinimumWidth(300)
+        left_shell_layout.addWidget(side_rail)
+        left_shell_layout.addWidget(left_scroll)
+        self.left_content_panel = left_scroll
+        self.side_rail = side_rail
+        left_shell.setMinimumWidth(318)
+        self.left_shell = left_shell
+        self.right_panel = right_panel
+        self.right_layout = right_layout
+        center_panel.setMinimumWidth(360)
+        right_panel.setMinimumWidth(430)
 
-        top_h_splitter.addWidget(left_scroll)
+        top_h_splitter.addWidget(left_shell)
         top_h_splitter.addWidget(center_panel)
         top_h_splitter.addWidget(right_panel)
         top_h_splitter.setStretchFactor(0, 0)
-        top_h_splitter.setStretchFactor(1, 3)
-        top_h_splitter.setStretchFactor(2, 2)
-        top_h_splitter.setSizes([280, 780, 500]) 
+        top_h_splitter.setStretchFactor(1, 4)
+        top_h_splitter.setStretchFactor(2, 1)
+        top_h_splitter.setSizes([328, 820, 460])
+        right_panel.setVisible(False)
+        top_h_splitter.setSizes([328, 1120, 0])
 
         main_v_splitter.addWidget(top_h_splitter) 
         main_v_splitter.addWidget(timeline_outer) 
         main_v_splitter.setStretchFactor(0, 1)
         main_v_splitter.setStretchFactor(1, 0)
         main_v_splitter.setCollapsible(1, False)
-        main_v_splitter.setSizes([700, 250])      
+        timeline_outer.setVisible(False)
+        main_v_splitter.setSizes([928, 0])
         
         main_layout.addWidget(main_v_splitter)
+        self._create_floating_panel_toggles()
 
         self.load_project_on_boot(); self.init_web_engine_once(); self._switch_sub_page(1); self._apply_font_license_filter(); self._update_font_preview(); self._update_preset_preview(); self.switch_inspector("empty")
         self.refresh_preset_combo()
+        self.refresh_signature_preset_combo()
+        self._update_workspace_status()
+        self._sync_panel_toggle_buttons()
+        self._refresh_edit_mode_controls()
+        self.set_workspace_mode(self.workspace_mode, initial=True)
+        QTimer.singleShot(300, self.update_floating_subtitle)
+        QTimer.singleShot(500, self.auto_fit_editor_layout)
 
         QTimer.singleShot(1000, self.check_and_download_ffmpeg)
+
+    def _create_floating_panel_toggles(self):
+        btn_style = """
+            QPushButton {
+                background-color: rgba(25, 29, 42, 238);
+                color: #f4f6ff;
+                border: 1px solid #4f5b7a;
+                border-radius: 15px;
+                font-size: 18px;
+                font-weight: 900;
+            }
+            QPushButton:hover {
+                background-color: #30384f;
+                border-color: #89b4fa;
+            }
+        """
+        self.btn_left_float_toggle = QPushButton("‹", self)
+        self.btn_left_float_toggle.setObjectName("leftFloatingToggle")
+        self.btn_left_float_toggle.setFixedSize(30, 52)
+        self.btn_left_float_toggle.setToolTip("收起/展开工程栏")
+        self.btn_left_float_toggle.setStyleSheet(btn_style)
+        self.btn_left_float_toggle.clicked.connect(lambda: self.set_left_sidebar_visible(not self.left_content_panel.isVisible()))
+
+        self.btn_right_float_toggle = QPushButton("‹", self)
+        self.btn_right_float_toggle.setObjectName("rightFloatingToggle")
+        self.btn_right_float_toggle.setFixedSize(30, 52)
+        self.btn_right_float_toggle.setToolTip("收起/展开参数栏")
+        self.btn_right_float_toggle.setStyleSheet(btn_style)
+        self.btn_right_float_toggle.clicked.connect(lambda: self.set_right_sidebar_visible(not self.right_panel.isVisible()))
+
+        self.btn_left_edge_toggle = self.btn_left_float_toggle
+        self.btn_left_float_toggle.show()
+        self.btn_right_float_toggle.show()
+        self._position_floating_panel_toggles()
+
+    def _position_floating_panel_toggles(self):
+        if not hasattr(self, "top_h_splitter") or not hasattr(self, "btn_left_float_toggle"):
+            return
+        geom = self.top_h_splitter.geometry()
+        sizes = self.top_h_splitter.sizes()
+        if not sizes or geom.width() <= 0:
+            return
+        left_w = sizes[0] if len(sizes) > 0 else 0
+        center_w = sizes[1] if len(sizes) > 1 else max(0, geom.width() - left_w)
+        right_w = sizes[2] if len(sizes) > 2 else 0
+        y = geom.y() + max(78, min(geom.height() - 78, geom.height() // 2 - 26))
+
+        left_x = geom.x() + max(54, left_w) - 15
+        if right_w > 0 and getattr(self, "right_panel", None) is not None and self.right_panel.isVisible():
+            right_x = geom.x() + left_w + center_w - 15
+        else:
+            right_x = geom.x() + geom.width() - 34
+
+        self.btn_left_float_toggle.move(max(4, min(left_x, self.width() - 68)), y)
+        self.btn_right_float_toggle.move(max(4, min(right_x, self.width() - 34)), y)
+        left_visible = getattr(self, "left_content_panel", None) is not None and self.left_content_panel.isVisible()
+        right_visible = getattr(self, "right_panel", None) is not None and self.right_panel.isVisible()
+        self.btn_left_float_toggle.setText("‹" if left_visible else "›")
+        self.btn_right_float_toggle.setText("›" if right_visible else "‹")
+        self.btn_left_float_toggle.raise_()
+        self.btn_right_float_toggle.raise_()
+        self._position_canvas_context_toolbar()
+
+    def _position_canvas_context_toolbar(self):
+        if not hasattr(self, "canvas_context_toolbar") or not hasattr(self, "preview_workspace"):
+            return
+        g = self.preview_workspace.geometry()
+        if g.width() <= 0 or g.height() <= 0:
+            return
+        hint_w = self.canvas_context_toolbar.sizeHint().width() + 18
+        tool_w = min(max(420, hint_w), max(320, g.width() - 48))
+        x = g.x() + max(12, (g.width() - tool_w) // 2)
+        y = g.y() + 12
+        self.canvas_context_toolbar.setGeometry(x, y, tool_w, 42)
+        if self.canvas_context_toolbar.isVisible():
+            self.canvas_context_toolbar.raise_()
+
+    def _layout_top_splitter(self):
+        if not hasattr(self, "top_h_splitter"):
+            return
+        sizes = self.top_h_splitter.sizes()
+        total = max(900, sum(sizes) or self.width())
+        left_visible = getattr(self, "left_content_panel", None) is not None and self.left_content_panel.isVisible()
+        right_visible = getattr(self, "right_panel", None) is not None and self.right_panel.isVisible()
+        left_w = 328 if left_visible else 72
+        right_w = 460 if right_visible else 0
+        center_w = max(500, total - left_w - right_w)
+        self.top_h_splitter.setSizes([left_w, center_w, right_w])
+        QTimer.singleShot(0, self._position_floating_panel_toggles)
+
+    def _on_right_tab_changed(self, index=None):
+        if hasattr(self, "right_panel") and self.right_panel.isVisible():
+            self._layout_top_splitter()
+
+    def _sync_panel_toggle_buttons(self):
+        if hasattr(self, "btn_toggle_left") and hasattr(self, "left_content_panel"):
+            self.btn_toggle_left.blockSignals(True)
+            self.btn_toggle_left.setChecked(self.left_content_panel.isVisible())
+            self.btn_toggle_left.blockSignals(False)
+        if hasattr(self, "btn_toggle_right") and hasattr(self, "right_panel"):
+            self.btn_toggle_right.blockSignals(True)
+            self.btn_toggle_right.setChecked(self.right_panel.isVisible())
+            self.btn_toggle_right.blockSignals(False)
+        if hasattr(self, "btn_toggle_timeline") and hasattr(self, "timeline_outer"):
+            self.btn_toggle_timeline.blockSignals(True)
+            self.btn_toggle_timeline.setChecked(self.timeline_outer.isVisible())
+            self.btn_toggle_timeline.blockSignals(False)
+        if hasattr(self, "chk_timeline_visible") and hasattr(self, "timeline_outer"):
+            self.chk_timeline_visible.blockSignals(True)
+            self.chk_timeline_visible.setChecked(self.timeline_outer.isVisible())
+            self.chk_timeline_visible.blockSignals(False)
+
+    def set_left_sidebar_visible(self, visible):
+        if not hasattr(self, "left_content_panel"):
+            return
+        self.left_content_panel.setVisible(bool(visible))
+        if hasattr(self, "left_shell"):
+            self.left_shell.setMinimumWidth(318 if visible else 68)
+        self._layout_top_splitter()
+        self._sync_panel_toggle_buttons()
+        self._position_floating_panel_toggles()
+        self._schedule_preview_layout_refresh()
+
+    def set_right_sidebar_visible(self, visible):
+        if not hasattr(self, "right_panel"):
+            return
+        self.right_panel.setVisible(bool(visible))
+        self._layout_top_splitter()
+        self._sync_panel_toggle_buttons()
+        self._position_floating_panel_toggles()
+        self._schedule_preview_layout_refresh()
+
+    def set_timeline_visible(self, visible):
+        if not hasattr(self, "timeline_outer"):
+            return
+        self.timeline_outer.setVisible(bool(visible))
+        if visible:
+            self.set_timeline_height_preset("normal")
+        elif hasattr(self, "main_v_splitter"):
+            total = max(600, sum(self.main_v_splitter.sizes()) or self.height())
+            self.main_v_splitter.setSizes([total, 0])
+        self._sync_panel_toggle_buttons()
+        self._position_floating_panel_toggles()
+        self._schedule_preview_layout_refresh()
+
+    def set_timeline_height_preset(self, preset="normal"):
+        if not hasattr(self, "main_v_splitter") or not hasattr(self, "timeline_outer"):
+            return
+        self.timeline_outer.setVisible(True)
+        total = max(620, sum(self.main_v_splitter.sizes()) or self.height())
+        if preset == "compact":
+            timeline_h = 112
+        elif preset == "large":
+            timeline_h = 280
+        else:
+            timeline_h = 168
+        timeline_h = min(max(92, timeline_h), max(92, total - 300))
+        self.main_v_splitter.setSizes([max(260, total - timeline_h), timeline_h])
+        self._sync_panel_toggle_buttons()
+        self._schedule_preview_layout_refresh()
+
+    def _schedule_preview_layout_refresh(self):
+        for delay in (0, 60, 180):
+            QTimer.singleShot(delay, self.refresh_preview_layout)
+
+    def refresh_preview_layout(self):
+        if hasattr(self, "preview_workspace"):
+            self.preview_workspace.update_stage_geometry()
+        self._position_floating_panel_toggles()
+        self.redraw_video_preview()
+        self._sync_preview_overlay_transform(sync_js=True, update_status=True)
+        self.last_render_hash = None
+        self.update_floating_subtitle()
+
+    def toggle_canvas_focus_mode(self):
+        focus_on = not getattr(self, "_canvas_focus_mode", False)
+        self._canvas_focus_mode = focus_on
+        if focus_on:
+            self._canvas_restore = {
+                "left": hasattr(self, "left_shell") and self.left_shell.isVisible(),
+                "right": hasattr(self, "right_panel") and self.right_panel.isVisible(),
+                "timeline": hasattr(self, "timeline_outer") and self.timeline_outer.isVisible(),
+            }
+            self.set_left_sidebar_visible(False)
+            self.set_right_sidebar_visible(False)
+            self.set_timeline_visible(False)
+        else:
+            restore = getattr(self, "_canvas_restore", {"left": True, "right": True, "timeline": True})
+            self.set_left_sidebar_visible(bool(restore.get("left", True)))
+            self.set_right_sidebar_visible(bool(restore.get("right", True)))
+            self.set_timeline_visible(bool(restore.get("timeline", True)))
+        if hasattr(self, "btn_canvas_focus"):
+            self.btn_canvas_focus.blockSignals(True)
+            self.btn_canvas_focus.setChecked(focus_on)
+            self.btn_canvas_focus.blockSignals(False)
+
+    def show_canvas_context_toolbar(self, context="canvas"):
+        if not hasattr(self, "canvas_context_toolbar"):
+            return
+        label_map = {
+            "canvas": "画面",
+            "subtitle": "字幕",
+            "video": "视频",
+            "audio": "音频",
+            "design": "设计",
+        }
+        if hasattr(self, "lbl_canvas_context"):
+            self.lbl_canvas_context.setText(label_map.get(context, "画面"))
+        if context == "canvas" and self.state.get("video_clips"):
+            self.current_selected_idx = -1
+            self.selected_track = "video"
+            self.update_floating_subtitle()
+        for btn in getattr(self, "ctx_buttons", {}).values():
+            btn.setVisible(False)
+        visible_map = {
+            "canvas": ["import_media", "split", "transition", "monitor", "video_duration", "audio", "delete"],
+            "video": ["import_media", "split", "transition", "monitor", "video_duration", "audio", "delete"],
+            "audio": ["import_media", "split", "audio", "delete"],
+            "subtitle": ["split", "caption", "position", "motion", "delete"],
+            "signature": ["signature"],
+            "design": ["monitor", "delete"],
+        }
+        for key in visible_map.get(context, visible_map["canvas"]):
+            if key in getattr(self, "ctx_buttons", {}):
+                self.ctx_buttons[key].setVisible(True)
+        if hasattr(self, "ctx_separator_media"):
+            self.ctx_separator_media.setVisible(context in ("canvas", "video"))
+        self._position_canvas_context_toolbar()
+        self.canvas_context_toolbar.setVisible(True)
+        self.canvas_context_toolbar.raise_()
+        self._refresh_edit_mode_controls()
+        self._update_workspace_status()
+
+    def hide_canvas_context_toolbar(self):
+        if hasattr(self, "canvas_context_toolbar"):
+            self.canvas_context_toolbar.setVisible(False)
+
+    def request_parent_workspace(self, workspace_key):
+        if workspace_key == "design":
+            workspace_key = "edit"
+        parent = self.parent_window()
+        if parent and hasattr(parent, "switch_room"):
+            parent.switch_room(1, workspace_key=workspace_key)
+        else:
+            self.set_workspace_mode(workspace_key)
+
+    def set_workspace_mode(self, mode="edit", initial=False):
+        mode = "edit"
+        self.workspace_mode = mode
+        parent = self.parent_window()
+        if parent and getattr(parent, "current_room_index", None) == 1:
+            parent.current_workspace_key = mode
+            if hasattr(parent, "_update_nav_selection"):
+                parent._update_nav_selection()
+        if hasattr(self, "design_box"):
+            self.design_box.setVisible(False)
+        if hasattr(self, "lbl_side_panel_title"):
+            self.lbl_side_panel_title.setText("精修")
+        if hasattr(self, "side_search"):
+            self.side_search.setPlaceholderText("搜索工程 / 字幕 / 素材")
+        if hasattr(self, "lbl_monitor_title"):
+            self.lbl_monitor_title.setText("PROGRAM MONITOR")
+        if hasattr(self, "lbl_timeline_title"):
+            self.lbl_timeline_title.setText("TIMELINE")
+        btn = getattr(self, "btn_side_edit_workspace", None)
+        if btn is not None:
+            btn.blockSignals(True)
+            btn.setChecked(True)
+            btn.blockSignals(False)
+        if not initial:
+            if self.selected_track == "design":
+                self.switch_inspector("empty")
+            if hasattr(self, "status_lbl"):
+                self.status_lbl.setText("🎬 精修工作台：字幕、素材、音频和逐句调整。")
+        if hasattr(self, "timeline_widget"):
+            self.timeline_widget.sync_from_controller()
+        self._update_workspace_status()
+
+    def set_edit_mode(self, enabled=True):
+        self.edit_mode = True
+        if hasattr(self, "status_lbl"):
+            self.status_lbl.setText("编辑工具默认可用；时间线可按需手动打开。")
+        if hasattr(self, "timeline_widget"):
+            self.timeline_widget.sync_from_controller()
+        if hasattr(self, "browser"):
+            self.browser.page().runJavaScript("if(typeof setEditMode === 'function') setEditMode(true);")
+        self._refresh_edit_mode_controls()
+        self._update_workspace_status()
+
+    def _refresh_edit_mode_controls(self):
+        self.edit_mode = True
+        checked_widgets = ["btn_top_edit", "btn_edit_mode", "btn_context_edit_mode"]
+        for name in checked_widgets:
+            btn = getattr(self, name, None)
+            if btn is not None:
+                btn.blockSignals(True)
+                btn.setChecked(True)
+                btn.blockSignals(False)
+                btn.setVisible(False)
+                if name == "btn_top_edit":
+                    btn.setText("编辑已开启")
+                elif name == "btn_edit_mode":
+                    btn.setText("编辑已开启")
+                elif name == "btn_context_edit_mode":
+                    btn.setText("编辑已开启")
+        for key, btn in getattr(self, "ctx_buttons", {}).items():
+            if key in {"import_media", "split", "transition", "delete"}:
+                btn.setEnabled(True)
+        if hasattr(self, "btn_add_text"):
+            self.btn_add_text.setVisible(True)
+        if hasattr(self, "insp_stack"):
+            self.insp_stack.setEnabled(True)
+
+    def _ensure_edit_mode(self, action="剪辑"):
+        self.edit_mode = True
+        return True
+
+    def _supported_media_path(self, file_path):
+        ext = os.path.splitext(file_path or "")[1].lower()
+        if ext in self._video_exts:
+            return "video"
+        if ext in self._audio_exts:
+            return "audio"
+        return ""
+
+    def import_media_dialog(self):
+        if not self._ensure_edit_mode("导入素材"):
+            return
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择素材",
+            "",
+            "Media Files (*.mp4 *.mov *.webm *.mkv *.avi *.mp3 *.wav *.m4a *.aac *.flac *.ogg)"
+        )
+        if file_path:
+            self.add_media_from_path(file_path)
+
+    def dragEnterEvent(self, event):
+        if not self.edit_mode:
+            event.ignore()
+            return
+        mime = event.mimeData()
+        if mime and any(self._supported_media_path(url.toLocalFile()) for url in mime.urls()):
+            event.acceptProposedAction()
+            return
+        event.ignore()
+
+    def dropEvent(self, event):
+        if not self._ensure_edit_mode("拖放素材"):
+            event.ignore()
+            return
+        accepted = False
+        for url in event.mimeData().urls():
+            local_path = url.toLocalFile()
+            if local_path and self.add_media_from_path(local_path):
+                accepted = True
+        if accepted:
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def add_media_from_path(self, file_path):
+        media_type = self._supported_media_path(file_path)
+        if media_type == "video":
+            return self.add_video_clip_from_path(file_path, start_t=self.current_play_time if self.edit_mode else None)
+        if media_type == "audio":
+            return self.set_audio_path_from_file(file_path)
+        if hasattr(self, "status_lbl"):
+            self.status_lbl.setText("⚠️ 暂不支持这个素材格式。")
+        return False
+
+    def _find_subtitle_at_time(self, time_sec):
+        for i, s in enumerate(self.state.get("subs_data", [])):
+            if float(s.get("start", 0.0) or 0.0) < time_sec < float(s.get("end", 0.0) or 0.0):
+                return i
+        return -1
+
+    def _find_video_at_time(self, time_sec):
+        for i, clip in enumerate(self.state.get("video_clips", [])):
+            if float(clip.get("start", 0.0) or 0.0) < time_sec < float(clip.get("end", 0.0) or 0.0):
+                return i
+        return -1
+
+    def split_at_playhead(self):
+        if not self._ensure_edit_mode("剪刀切分"):
+            return
+        t = float(self.current_play_time or 0.0)
+        if self.selected_track == "sub":
+            idx = self.current_selected_idx if 0 <= self.current_selected_idx < len(self.state.get("subs_data", [])) else self._find_subtitle_at_time(t)
+            if idx >= 0 and self._split_subtitle_clip(idx, t):
+                return
+        if self.selected_track == "video":
+            idx = self.current_v_idx if 0 <= self.current_v_idx < len(self.state.get("video_clips", [])) else self._find_video_at_time(t)
+            if idx >= 0 and self._split_video_clip(idx, t):
+                return
+        sub_idx = self._find_subtitle_at_time(t)
+        if sub_idx >= 0 and self._split_subtitle_clip(sub_idx, t):
+            return
+        vid_idx = self._find_video_at_time(t)
+        if vid_idx >= 0 and self._split_video_clip(vid_idx, t):
+            return
+        if hasattr(self, "status_lbl"):
+            self.status_lbl.setText("⚠️ 播放头没有落在可切分的片段中间。")
+
+    def _split_subtitle_clip(self, idx, time_sec):
+        subs = self.state.get("subs_data", [])
+        if not (0 <= idx < len(subs)):
+            return False
+        clip = subs[idx]
+        start = float(clip.get("start", 0.0) or 0.0)
+        end = float(clip.get("end", start) or start)
+        if not (start + 0.05 < time_sec < end - 0.05):
+            return False
+        left = copy.deepcopy(clip)
+        right = copy.deepcopy(clip)
+        left["end"] = time_sec
+        right["start"] = time_sec
+        left_words, right_words = [], []
+        for word in clip.get("words", []):
+            w = copy.deepcopy(word)
+            ws = float(w.get("start", start) or start)
+            we = float(w.get("end", end) or end)
+            if we <= time_sec:
+                left_words.append(w)
+            elif ws >= time_sec:
+                right_words.append(w)
+            else:
+                lw = copy.deepcopy(w); rw = copy.deepcopy(w)
+                lw["end"] = time_sec; rw["start"] = time_sec
+                left_words.append(lw); right_words.append(rw)
+        if left_words and right_words:
+            left["words"] = left_words
+            right["words"] = right_words
+            left["text"] = " ".join(str(w.get("text", "")).strip() for w in left_words).strip()
+            right["text"] = " ".join(str(w.get("text", "")).strip() for w in right_words).strip()
+        else:
+            text = str(clip.get("text", "") or "")
+            cut = max(1, min(len(text) - 1, int(len(text) * ((time_sec - start) / max(0.001, end - start)))))
+            left["text"] = text[:cut].strip() or text
+            right["text"] = text[cut:].strip() or text
+            left["words"] = [{"text": left["text"], "start": start, "end": time_sec}]
+            right["words"] = [{"text": right["text"], "start": time_sec, "end": end}]
+        subs[idx:idx + 1] = [left, right]
+        self.state["subs_data"] = sorted(subs, key=lambda x: float(x.get("start", 0.0) or 0.0))
+        self.current_selected_idx = self.state["subs_data"].index(right)
+        self.selected_track = "sub"
+        self.render_ui_list()
+        self.switch_inspector("sub")
+        self.update_timeline_size()
+        self.update_floating_subtitle()
+        self.auto_save_cache()
+        self.push_history()
+        self.status_lbl.setText("✂️ 字幕已在播放头切分。")
+        return True
+
+    def _split_video_clip(self, idx, time_sec):
+        clips = self.state.get("video_clips", [])
+        if not (0 <= idx < len(clips)):
+            return False
+        clip = clips[idx]
+        start = float(clip.get("start", 0.0) or 0.0)
+        end = float(clip.get("end", start) or start)
+        if not (start + 0.05 < time_sec < end - 0.05):
+            return False
+        left = copy.deepcopy(clip)
+        right = copy.deepcopy(clip)
+        left["end"] = time_sec
+        right["start"] = time_sec
+        source_in = float(clip.get("source_in", 0.0) or 0.0)
+        source_out = float(clip.get("source_out", clip.get("dur", end - start)) or clip.get("dur", end - start) or 0.0)
+        source_len = max(0.001, source_out - source_in)
+        timeline_offset = max(0.0, time_sec - start)
+        source_cut = min(source_out, source_in + (timeline_offset % source_len))
+        left["source_in"] = source_in
+        left["source_out"] = max(source_in, source_cut)
+        right["source_in"] = source_cut
+        right["source_out"] = source_out
+        right.setdefault("transition", {"type": "cut", "duration": 0.0})
+        clips[idx:idx + 1] = [left, right]
+        self.state["video_clips"] = sorted(clips, key=lambda x: float(x.get("start", 0.0) or 0.0))
+        self.current_v_idx = self.state["video_clips"].index(right)
+        self.current_selected_idx = -1
+        self.selected_track = "video"
+        self.switch_inspector("video")
+        self._recalc_duration()
+        self.auto_save_cache()
+        self.status_lbl.setText("✂️ 视频片段已在播放头切分。")
+        return True
+
+    def apply_simple_transition(self):
+        if not self._ensure_edit_mode("添加转场"):
+            return
+        if self.selected_track == "video" and 0 <= self.current_v_idx < len(self.state.get("video_clips", [])):
+            clip = self.state["video_clips"][self.current_v_idx]
+            clip["transition"] = {"type": "fade", "duration": 0.35}
+            self.timeline_widget.sync_from_controller()
+            self.auto_save_cache()
+            self.status_lbl.setText("✨ 已给当前视频片段标记 0.35s 淡化转场。")
+            return
+        if self.selected_track == "sub" and 0 <= self.current_selected_idx < len(self.state.get("subs_data", [])):
+            clip = self.state["subs_data"][self.current_selected_idx]
+            clip.setdefault("style", {}).update({"anim_type": "fade", "pop_speed": 0.28})
+            self.sync_inspector_to_clip()
+            self.update_floating_subtitle()
+            self.timeline_widget.sync_from_controller()
+            self.auto_save_cache()
+            self.status_lbl.setText("✨ 已给当前字幕设置柔和淡入。")
+            return
+        self.status_lbl.setText("⚠️ 请先选中视频或字幕片段，再添加转场。")
+
+    def delete_context_selection(self):
+        if not self._ensure_edit_mode("删除片段"):
+            return
+        if self.selected_track == "design" and self.selected_design_layer_id:
+            self.delete_selected_design_layer()
+        elif self.current_selected_idx != -1:
+            self.delete_current_clip()
+        elif self.state.get("video_clips"):
+            self.remove_last_video_clip()
+
+    def open_effects_dialog(self, target="caption"):
+        title_map = {
+            "caption": "字幕精修",
+            "position": "字幕位置",
+            "motion": "字幕动效",
+            "media": "视频编辑",
+            "audio": "音频选项",
+            "signature": "固定署名",
+            "design": "设计图层",
+        }
+        panel_title = title_map.get(target, "参数")
+        if getattr(self, "_tabs_floating", False):
+            self._dock_effect_tabs()
+
+        if target == "caption":
+            if self.current_selected_idx != -1:
+                self.switch_inspector("sub")
+                self._switch_sub_page(1)
+            else:
+                self.tabs.setCurrentIndex(0)
+        elif target in ("position", "motion"):
+            if self.current_selected_idx != -1:
+                self.switch_inspector("sub")
+            self.tabs.setCurrentIndex(1)
+            self._switch_sub_page(0 if target == "position" else 2)
+        elif target == "audio":
+            self.switch_inspector("audio")
+        elif target == "media":
+            if self.selected_track == "audio":
+                self.switch_inspector("audio")
+            elif self.state.get("video_clips"):
+                self.switch_inspector("video")
+            else:
+                self.tabs.setCurrentIndex(1)
+        elif target == "signature":
+            self.tabs.setCurrentWidget(self.signature_panel)
+        elif target == "design":
+            self.set_workspace_mode("design")
+
+        if hasattr(self, "right_panel_title"):
+            self.right_panel_title.setText(panel_title)
+        self.set_right_sidebar_visible(True)
+        if hasattr(self, "tabs"):
+            self.tabs.raise_()
+
+    def _dock_effect_tabs(self):
+        if not getattr(self, "_tabs_floating", False):
+            return
+        if hasattr(self, "tabs") and hasattr(self, "right_layout"):
+            self.tabs.setParent(self.right_panel)
+            self.right_layout.addWidget(self.tabs)
+        self._tabs_floating = False
+        self.effects_dialog = None
 
     def apply_theme(self, colors, theme_key=None):
         self._theme_colors = colors
@@ -733,6 +2723,87 @@ class EditView(QWidget):
             self.timeline_widget.setStyleSheet(f"background-color: {colors['bg']}; border: none;")
             self.timeline_widget.scene.update()
             self.timeline_widget.viewport().update()
+        self._refresh_editor_overlay_styles()
+        self._position_canvas_context_toolbar()
+
+    def _refresh_editor_overlay_styles(self):
+        c = getattr(self, "_theme_colors", None)
+        if not c:
+            return
+        if hasattr(self, "right_panel"):
+            self.right_panel.setStyleSheet(f"""
+                QFrame {{
+                    background-color: {c['panel']};
+                    border-left: 1px solid {c['border']};
+                    border-radius: 0px;
+                }}
+                QLabel {{ color: {c['text']}; }}
+            """)
+        if hasattr(self, "canvas_context_toolbar"):
+            self.canvas_context_toolbar.setStyleSheet(f"""
+                QFrame {{
+                    background-color: {c['panel']};
+                    border: 1px solid {c['border']};
+                    border-radius: 10px;
+                }}
+                QPushButton {{
+                    background: transparent;
+                    color: {c['text']};
+                    border: none;
+                    border-radius: 6px;
+                    padding: 6px 9px;
+                    font-weight: 800;
+                }}
+                QPushButton:hover {{
+                    background: {c['panel_2']};
+                }}
+                QLabel {{
+                    color: {c['muted']};
+                    border: none;
+                }}
+            """)
+        btn_style = f"""
+            QPushButton {{
+                background-color: {c['panel']};
+                color: {c['text']};
+                border: 1px solid {c['border']};
+                border-radius: 15px;
+                font-size: 18px;
+                font-weight: 900;
+            }}
+            QPushButton:hover {{
+                background-color: {c['panel_2']};
+                border-color: {c['accent']};
+            }}
+        """
+        for name in ("btn_left_float_toggle", "btn_right_float_toggle"):
+            if hasattr(self, name):
+                getattr(self, name).setStyleSheet(btn_style)
+
+    def auto_fit_editor_layout(self):
+        if getattr(self, "_auto_layout_applied", False):
+            return
+        self._auto_layout_applied = True
+        screen_w = self.window().width() if self.window() else self.width()
+        if screen_w and screen_w < 1450:
+            self.set_left_sidebar_visible(False)
+            self.set_right_sidebar_visible(False)
+            self.set_timeline_visible(False)
+        elif screen_w and screen_w < 1700:
+            self.set_right_sidebar_visible(False)
+            self.set_timeline_visible(False)
+        elif hasattr(self, "timeline_outer") and self.timeline_outer.isVisible():
+            self.set_timeline_visible(False)
+        self._sync_panel_toggle_buttons()
+        self._position_floating_panel_toggles()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        QTimer.singleShot(0, self._position_floating_panel_toggles)
+        QTimer.singleShot(0, self._position_canvas_context_toolbar)
+        if hasattr(self, "video_label"):
+            QTimer.singleShot(0, self.redraw_video_preview)
+            QTimer.singleShot(0, self._sync_preview_overlay_transform)
 
     # 👑 时光机核心引擎
     def push_history(self):
@@ -944,13 +3015,16 @@ class EditView(QWidget):
         <head>
             <style>
                 __FONT_FACE_CSS__
-                html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
-                #scale-wrapper { width: 100vw; height: 100vh; position: absolute; left: 0; top: 0; transition: transform 0.15s ease-out; }
+                html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; touch-action: none; }
+                #scale-wrapper { width: 100vw; height: 100vh; position: absolute; left: 0; top: 0; cursor: grab; will-change: transform; }
+                #scale-wrapper.panning { cursor: grabbing; }
+                #design-layer { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+                #signature-layer { position: absolute; inset: 0; pointer-events: none; z-index: 90; }
                 
-                .drag-container { position: absolute; transform: translate(-50%, -50%); width: max-content; max-width: 92%; }
-                .sub-box { outline: none; }
+                .drag-container { position: absolute; transform: translate(-50%, -50%); width: max-content; max-width: 92%; will-change: left, top, transform; overflow: visible; }
+                .sub-box { outline: none; overflow: visible; }
                 
-                #safe-area { position: absolute; top: 15%; bottom: 20%; left: 10%; right: 10%; border: 2px dashed rgba(255, 255, 255, 0.4); pointer-events: none; z-index: 999; }
+                #safe-area { position: absolute; top: 15%; bottom: 20%; left: 10%; right: 10%; border: 2px dashed rgba(255, 255, 255, 0.4); pointer-events: none; z-index: 999; display: none; }
                 
                 /* 👑 冰蓝呼吸灯高光边框 */
                 .selected-box { 
@@ -975,6 +3049,8 @@ class EditView(QWidget):
         <body id="canvas">
             <div id="scale-wrapper">
                 <div id="safe-area"></div>
+                <div id="design-layer"></div>
+                <div id="signature-layer"></div>
             </div>
             <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
             <script>
@@ -988,18 +3064,92 @@ class EditView(QWidget):
                     PROJ_W = w; PROJ_H = h;
                 }
 
-                // 👑 Ctrl + 滚轮缩放监听
+                // 监看器缩放 / 平移只影响预览，不改工程输出参数。
                 let currentZoom = 1.0;
+                let monitorPanX = 0.0;
+                let monitorPanY = 0.0;
+                let EDIT_MODE = true;
+                function setEditMode(enabled) {
+                    EDIT_MODE = !!enabled;
+                    document.body.classList.toggle('edit-mode', EDIT_MODE);
+                }
+                function applyMonitorTransform() {
+                    const wrapper = document.getElementById('scale-wrapper');
+                    if (!wrapper) return;
+                    wrapper.dataset.previewZoom = currentZoom.toFixed(4);
+                }
+                function setMonitorView(zoom, panX, panY) {
+                    currentZoom = Math.min(Math.max(Number(zoom) || 1.0, 0.25), 8.0);
+                    monitorPanX = Number(panX) || 0.0;
+                    monitorPanY = Number(panY) || 0.0;
+                    applyMonitorTransform();
+                }
                 window.addEventListener('wheel', (e) => {
                     if (e.ctrlKey) {
                         e.preventDefault();
-                        if (e.deltaY < 0) currentZoom += 0.1;
-                        else currentZoom -= 0.1;
-                        currentZoom = Math.min(Math.max(0.2, currentZoom), 3.0);
-                        document.getElementById('scale-wrapper').style.transform = `scale(${currentZoom})`;
-                        document.getElementById('scale-wrapper').style.transformOrigin = 'center center';
+                        if (backend) backend.adjust_monitor_zoom(e.deltaY, e.clientX, e.clientY);
                     }
                 }, {passive: false});
+
+                let isMonitorPanning = false;
+                let panLastX = 0;
+                let panLastY = 0;
+                function isOverlayControlTarget(target) {
+                    if (!target || typeof target.closest !== 'function') return false;
+                    return !!(target && (
+                        target.closest('.drag-container') ||
+                        target.closest('.sub-box') ||
+                        target.classList.contains('width-handle')
+                    ));
+                }
+                window.addEventListener('mousedown', (e) => {
+                    if (e.button !== 0 || isOverlayControlTarget(e.target)) return;
+                    if (backend) backend.show_context_toolbar();
+                    isMonitorPanning = true;
+                    panLastX = e.clientX;
+                    panLastY = e.clientY;
+                    document.getElementById('scale-wrapper')?.classList.add('panning');
+                    e.preventDefault();
+                });
+                window.addEventListener('mousemove', (e) => {
+                    if (!isMonitorPanning) return;
+                    const dx = e.clientX - panLastX;
+                    const dy = e.clientY - panLastY;
+                    panLastX = e.clientX;
+                    panLastY = e.clientY;
+                    monitorPanX += dx;
+                    monitorPanY += dy;
+                    applyMonitorTransform();
+                    if (backend) backend.pan_monitor_view(dx, dy);
+                    e.preventDefault();
+                });
+                window.addEventListener('mouseup', () => {
+                    if (!isMonitorPanning) return;
+                    isMonitorPanning = false;
+                    document.getElementById('scale-wrapper')?.classList.remove('panning');
+                    if (backend) backend.finalize_monitor_pan();
+                });
+                window.addEventListener('dblclick', (e) => {
+                    if (isOverlayControlTarget(e.target)) return;
+                    if (backend) backend.reset_monitor_view();
+                });
+
+                function ensureSubtitleBox(el, idx) {
+                    let box = el.querySelector('.sub-box');
+                    if(!box) return null;
+                    if(!box.hasAttribute('data-handles')) {
+                        box.setAttribute('data-handles', 'true');
+                        ['ml', 'mr'].forEach(pos => {
+                            let c = document.createElement('div'); c.className = `width-handle ${pos}`; box.appendChild(c);
+                        });
+                        makeResizable(box, idx);
+                    }
+                    if(el.dataset.dragBound !== 'true') {
+                        makeDraggable(el);
+                        el.dataset.dragBound = 'true';
+                    }
+                    return box;
+                }
 
                 function syncSubs(subsJson) {
                     const subs = JSON.parse(subsJson);
@@ -1017,19 +3167,6 @@ class EditView(QWidget):
                             el.className = 'drag-container';
                             el.dataset.idx = sub.idx;
                             canvas.appendChild(el);
-                            
-                            let observer = new MutationObserver(() => {
-                                let box = el.querySelector('.sub-box');
-                                if(box && !box.hasAttribute('data-handles')) {
-                                    box.setAttribute('data-handles', 'true');
-                                    ['ml', 'mr'].forEach(pos => {
-                                        let c = document.createElement('div'); c.className = `width-handle ${pos}`; box.appendChild(c);
-                                    });
-                                    makeDraggable(el);
-                                    makeResizable(box, sub.idx);
-                                }
-                            });
-                            observer.observe(el, { childList: true });
                         }
                         
                         if(sub.htmlText.trim() === "") {
@@ -1041,7 +3178,7 @@ class EditView(QWidget):
                             }
                         }
                         
-                        let box = el.querySelector('.sub-box');
+                        let box = ensureSubtitleBox(el, sub.idx);
                         if(box) {
                             if(sub.isSelected) { box.classList.add('selected-box'); } 
                             else { box.classList.remove('selected-box'); }
@@ -1057,28 +3194,60 @@ class EditView(QWidget):
                         el.dataset.pos_y = sub.pos_y;
                         el.style.left = `calc(50% + ${sub.pos_x}%)`;
                         el.style.top = `calc(50% + ${sub.pos_y}%)`;
-                        el.style.zIndex = sub.track === 0 ? "10" : "5";
+                        el.style.zIndex = sub.track === 0 ? "30" : "20";
                     });
+                }
+
+                function syncSignature(htmlText) {
+                    const layer = document.getElementById('signature-layer');
+                    if (!layer) return;
+                    if (!htmlText || htmlText.trim() === "") {
+                        layer.innerHTML = "";
+                        layer.style.display = "none";
+                    } else {
+                        layer.style.display = "block";
+                        if (layer.innerHTML !== htmlText) layer.innerHTML = htmlText;
+                    }
+                }
+
+                function syncDesign(htmlText) {
+                    const layer = document.getElementById('design-layer');
+                    if (!layer) return;
+                    if (!htmlText || htmlText.trim() === "") {
+                        layer.innerHTML = "";
+                        layer.style.display = "none";
+                    } else {
+                        layer.style.display = "block";
+                        if (layer.innerHTML !== htmlText) layer.innerHTML = htmlText;
+                    }
                 }
                 
                 function makeDraggable(el) {
-                    let isDragging = false, startX, startY;
+                    if(el.dataset.dragBound === 'true') return;
+                    let isDragging = false, hasMoved = false, startX, startY;
                     el.addEventListener('mousedown', e => {
                         let box = el.querySelector('.sub-box');
                         if ((box && box.isContentEditable) || e.target.classList.contains('width-handle')) return; 
-                        isDragging = true; startX = e.clientX; startY = e.clientY;
+                        if(backend) backend.notify_selected(parseInt(el.dataset.idx));
+                        if(!EDIT_MODE) return;
+                        isDragging = true; hasMoved = false; startX = e.clientX; startY = e.clientY;
                         el.dataset.ox = parseFloat(el.dataset.pos_x) || 0;
                         el.dataset.oy = parseFloat(el.dataset.pos_y) || 0;
-                        if(backend) backend.notify_selected(parseInt(el.dataset.idx));
+                        delete el.dataset.vx;
+                        delete el.dataset.vy;
                     });
                     window.addEventListener('mousemove', e => {
                         if (!isDragging) return;
+                        const rawDx = e.clientX - startX;
+                        const rawDy = e.clientY - startY;
+                        if (!hasMoved && Math.hypot(rawDx, rawDy) < 3) return;
+                        hasMoved = true;
                         let wrapper = document.getElementById('scale-wrapper');
                         let rect = wrapper.getBoundingClientRect();
                         
                         // 修正缩放后的拖拽比例
-                        let dx_pct = (e.clientX - startX) / (rect.width / currentZoom) * 100;
-                        let dy_pct = (e.clientY - startY) / (rect.height / currentZoom) * 100;
+                        let dx_pct = rawDx / rect.width * 100;
+                        let dy_pct = rawDy / rect.height * 100;
                         
                         let cx = parseFloat(el.dataset.ox) + dx_pct;
                         let cy = parseFloat(el.dataset.oy) + dy_pct;
@@ -1090,10 +3259,13 @@ class EditView(QWidget):
                     window.addEventListener('mouseup', e => {
                         if (isDragging) {
                             isDragging = false;
-                            if(backend && el.dataset.vx) backend.update_coordinates(parseInt(el.dataset.idx), parseFloat(el.dataset.vx), parseFloat(el.dataset.vy));
+                            if(hasMoved && backend && el.dataset.vx) backend.update_coordinates(parseInt(el.dataset.idx), parseFloat(el.dataset.vx), parseFloat(el.dataset.vy));
+                            delete el.dataset.vx;
+                            delete el.dataset.vy;
                         }
                     });
                     el.addEventListener('dblclick', () => {
+                        if(!EDIT_MODE) return;
                         let box = el.querySelector('.sub-box');
                         if(box) { 
                             box.classList.add('editing'); 
@@ -1110,6 +3282,7 @@ class EditView(QWidget):
                         }
                     }, true);
                     el.addEventListener('wheel', (e) => {
+                        if(!EDIT_MODE) return;
                         let box = el.querySelector('.sub-box');
                         if (box && box.isContentEditable) return;
                         // 不再拦截非 Ctrl 的滚轮（修复冲突）
@@ -1120,6 +3293,8 @@ class EditView(QWidget):
                     });
                 }
 
+                window.__activeWidthResize = null;
+
                 function makeResizable(box, idx) {
                     const handles = box.querySelectorAll('.width-handle');
                     let isResizingWidth = false;
@@ -1127,31 +3302,40 @@ class EditView(QWidget):
 
                     handles.forEach(c => {
                         c.addEventListener('mousedown', e => {
+                            if(!EDIT_MODE) return;
                             e.stopPropagation(); 
+                            window.__activeWidthResize = { dragContainer, idx };
                             isResizingWidth = true;
                         });
                     });
 
+                    if (window.__resizeListenersReady) return;
+                    window.__resizeListenersReady = true;
                     window.addEventListener('mousemove', e => {
-                        if (isResizingWidth) {
+                        if (window.__activeWidthResize) {
+                            let dragContainer = window.__activeWidthResize.dragContainer;
+                            if (!dragContainer) return;
                             let wrapper = document.getElementById('scale-wrapper');
                             let rect = wrapper.getBoundingClientRect();
                             let boxRect = dragContainer.getBoundingClientRect();
                             let boxCx = boxRect.left + boxRect.width/2;
                             
-                            // 修正缩放比例
-                            let newHalfWidth = Math.abs(e.clientX - boxCx) / currentZoom;
+                            // 舞台由原生窗口尺寸缩放，rect 已经是当前视图尺寸。
+                            let newHalfWidth = Math.abs(e.clientX - boxCx);
                             let newWidthPx = Math.max(newHalfWidth * 2, 100); 
-                            let newWidthVw = (newWidthPx / (rect.width / currentZoom)) * 100;
+                            let newWidthVw = (newWidthPx / rect.width) * 100;
                             dragContainer.style.width = newWidthVw + 'vw';
                             dragContainer.dataset.newWidth = newWidthVw;
                         }
                     });
                     
                     window.addEventListener('mouseup', () => { 
-                        if (isResizingWidth) {
+                        if (window.__activeWidthResize) {
+                            let dragContainer = window.__activeWidthResize.dragContainer;
+                            let idx = window.__activeWidthResize.idx;
+                            window.__activeWidthResize = null;
                             isResizingWidth = false;
-                            if (backend && dragContainer.dataset.newWidth) {
+                            if (backend && dragContainer && dragContainer.dataset.newWidth) {
                                 backend.update_box_width(idx, parseFloat(dragContainer.dataset.newWidth));
                                 dragContainer.dataset.newWidth = ""; 
                             }
@@ -1197,6 +3381,71 @@ class EditView(QWidget):
             with open(PRESETS_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=2)
         except: pass
 
+    def notify_batch_presets_changed(self, style_name=None, signature_name=None):
+        parent = self.parent_window()
+        room_batch = getattr(parent, "room_batch", None) if parent else None
+        if room_batch and hasattr(room_batch, "refresh_external_presets"):
+            room_batch.refresh_external_presets(style_name=style_name, signature_name=signature_name)
+
+    def _built_in_signature_presets(self):
+        return {
+            "右上角柔光玻璃": default_signature_config(self.default_style),
+            "右上角纯色小标": {
+                **default_signature_config(self.default_style),
+                "style": {
+                    **default_signature_config(self.default_style)["style"],
+                    "bg_mode": "block",
+                    "bg_alpha": 58,
+                    "bg_radius": 14,
+                    "bg_padding": 8,
+                    "bg_pad_left": 14,
+                    "bg_pad_right": 14,
+                    "bg_pad_top": 4,
+                    "bg_pad_bottom": 5,
+                },
+            },
+            "右上角无底透明字": {
+                **default_signature_config(self.default_style),
+                "style": {
+                    **default_signature_config(self.default_style)["style"],
+                    "bg_mode": "none",
+                    "bg_alpha": 0,
+                    "stroke_width": 2,
+                    "shadow_alpha": 70,
+                },
+            },
+        }
+
+    def load_signature_presets(self):
+        presets = self._built_in_signature_presets()
+        if os.path.exists(SIGNATURE_PRESETS_FILE):
+            try:
+                with open(SIGNATURE_PRESETS_FILE, "r", encoding="utf-8") as f:
+                    saved = json.load(f)
+                if isinstance(saved, dict):
+                    presets.update(saved)
+            except Exception:
+                pass
+        return presets
+
+    def save_signature_presets(self, data):
+        try:
+            built_ins = set(self._built_in_signature_presets().keys())
+            user_data = {k: v for k, v in data.items() if k not in built_ins}
+            with open(SIGNATURE_PRESETS_FILE, "w", encoding="utf-8") as f:
+                json.dump(user_data, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
+    def refresh_signature_preset_combo(self):
+        if not hasattr(self, "signature_template_combo"):
+            return
+        self.signature_template_combo.blockSignals(True)
+        self.signature_template_combo.clear()
+        for name in self.load_signature_presets().keys():
+            self.signature_template_combo.addItem(name, userData=name)
+        self.signature_template_combo.blockSignals(False)
+
     # 👑 视觉预设下拉框核心引擎：调用 QPainter 纯手工绘制所见即所得
     def refresh_preset_combo(self):
         self.preset_combo.blockSignals(True)
@@ -1213,7 +3462,8 @@ class EditView(QWidget):
         
         presets = self.load_style_presets()
         if presets:
-            for name, st in presets.items():
+            for name, raw_preset in presets.items():
+                st, _ = split_style_preset(raw_preset)
                 # 👑 开启 2D 硬件加速画笔，直接在内存中绘制图标
                 pixmap = QPixmap(220, 40)
                 pixmap.fill(Qt.GlobalColor.transparent) # 透明底色
@@ -1280,11 +3530,16 @@ class EditView(QWidget):
         name, ok = QInputDialog.getText(self, "💾 存为预设", "给这个酷炫的样式起个名字吧\n(例如: 爆款红底白字):")
         if ok and name.strip():
             clip = self.state["subs_data"][self.current_selected_idx]
-            style_data = clip.get("style", self.default_style).copy()
+            style_data = copy.deepcopy(clip.get("style", self.default_style))
+            style_data[STYLE_PRESET_POSITION_KEY] = {
+                "pos_x": float(clip.get("pos_x", self.state.get("default_pos_x", 0.0))),
+                "pos_y": float(clip.get("pos_y", self.state.get("default_pos_y", 25.0))),
+            }
             presets = self.load_style_presets()
             presets[name.strip()] = style_data
             self.save_style_presets(presets)
             self.refresh_preset_combo()
+            self.notify_batch_presets_changed(style_name=name.strip())
             
             # 👑 修复：根据隐藏的 userData 找到刚保存的预设并选中它
             idx = self.preset_combo.findData(name.strip(), Qt.ItemDataRole.UserRole)
@@ -1304,7 +3559,54 @@ class EditView(QWidget):
                 del presets[name]
                 self.save_style_presets(presets)
                 self.refresh_preset_combo()
+                self.notify_batch_presets_changed()
                 self._update_preset_preview()
+
+    def manage_style_presets(self):
+        presets = self.load_style_presets()
+        if not presets:
+            return QMessageBox.information(self, "预设库", "当前还没有保存过字幕预设。")
+        names = list(presets.keys())
+        name, ok = QInputDialog.getItem(self, "管理预设库", "选择预设:", names, 0, False)
+        if not ok or not name:
+            return
+        action, ok = QInputDialog.getItem(self, "管理预设库", "选择操作:", ["重命名", "删除", "用当前字幕覆盖"], 0, False)
+        if not ok:
+            return
+        target_name = name
+        if action == "重命名":
+            new_name, ok = QInputDialog.getText(self, "重命名预设", "新名称:", text=name)
+            if ok and new_name.strip() and new_name.strip() != name:
+                if new_name.strip() in presets:
+                    return QMessageBox.warning(self, "重名", "预设库里已经有这个名称。")
+                target_name = new_name.strip()
+                presets[target_name] = presets.pop(name)
+                self.save_style_presets(presets)
+        elif action == "删除":
+            reply = QMessageBox.question(self, "删除预设", f'确定删除预设 "{name}" 吗？', QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+            presets.pop(name, None)
+            self.save_style_presets(presets)
+            target_name = ""
+        elif action == "用当前字幕覆盖":
+            if self.current_selected_idx == -1:
+                return QMessageBox.warning(self, "提示", "请先选中一个已经调好样式的字幕。")
+            clip = self.state["subs_data"][self.current_selected_idx]
+            style_data = copy.deepcopy(clip.get("style", self.default_style))
+            style_data[STYLE_PRESET_POSITION_KEY] = {
+                "pos_x": float(clip.get("pos_x", self.state.get("default_pos_x", 0.0))),
+                "pos_y": float(clip.get("pos_y", self.state.get("default_pos_y", 25.0))),
+            }
+            presets[name] = style_data
+            self.save_style_presets(presets)
+        self.refresh_preset_combo()
+        self.notify_batch_presets_changed(style_name=target_name or None)
+        if target_name:
+            idx = self.preset_combo.findData(target_name, Qt.ItemDataRole.UserRole)
+            if idx >= 0:
+                self.preset_combo.setCurrentIndex(idx)
+        self._update_preset_preview()
 
     def apply_style_preset(self):
         if self.current_selected_idx == -1: return QMessageBox.warning(self, "提示", "请先在时间线上选中要应用的字幕！")
@@ -1314,13 +3616,19 @@ class EditView(QWidget):
         presets = self.load_style_presets()
         
         if name in presets:
-            preset_style = presets[name]
+            preset_style, preset_position = split_style_preset(presets[name])
             targets = self._get_target_clips()
             for c in targets:
                 if "style" not in c: c["style"] = {}
                 c["style"].update(preset_style)
+                if preset_position:
+                    c["pos_x"] = preset_position["pos_x"]
+                    c["pos_y"] = preset_position["pos_y"]
             
             self.default_style.update(preset_style)
+            if preset_position:
+                self.state["default_pos_x"] = preset_position["pos_x"]
+                self.state["default_pos_y"] = preset_position["pos_y"]
             self.sync_inspector_to_clip()
             self._update_preset_preview()
             self.update_floating_subtitle()
@@ -1336,7 +3644,7 @@ class EditView(QWidget):
         # 👑 修复：读取隐藏的 userData 获取真实名字
         name = self.preset_combo.currentData(Qt.ItemDataRole.UserRole)
         presets = self.load_style_presets() if hasattr(self, "load_style_presets") else {}
-        st = presets.get(name) if name else None
+        st = split_style_preset(presets.get(name))[0] if name and presets.get(name) else None
         
         if st is None and self.current_selected_idx != -1 and self.current_selected_idx < len(self.state.get("subs_data", [])):
             st = self.state["subs_data"][self.current_selected_idx].get("style", self.default_style)
@@ -1351,6 +3659,67 @@ class EditView(QWidget):
         
         self.preset_preview_label.setText(preview_text)
         self.preset_preview_label.setStyleSheet(f"background-color:{bg}; border:1px dashed #45475a; border-radius:10px; color:{color}; padding:10px; font-family:'{family}'; font-size:{size}px; font-weight:{font_weight}; font-style:{font_style};")
+        if hasattr(self, "preset_preview_web"):
+            tokens = [token for token in re.split(r"\s+", preview_text) if token]
+            if not tokens:
+                tokens = [preview_text]
+            words = []
+            start = 0.15
+            step = 1.6 / max(1, len(tokens))
+            for i, token in enumerate(tokens):
+                words.append({"text": token, "start": start + i * step, "end": start + (i + 1) * step})
+            preview_style = copy.deepcopy(st)
+            preview_style.setdefault("box_width", 82.0)
+            preview_sub = {
+                "text": preview_text,
+                "words": words,
+                "start": 0.0,
+                "end": 2.0,
+                "style": preview_style,
+                "pos_x": 0.0,
+                "pos_y": 25.0,
+            }
+            rendered = render_subtitle_html(preview_sub, 1.05, 1080)
+            preview_html = f"""
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+{font_face_css()}
+html, body {{
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #11111b;
+    color: white;
+}}
+body {{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+        linear-gradient(90deg, rgba(255,255,255,0.055) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(255,255,255,0.045) 1px, transparent 1px),
+        #11111b;
+    background-size: 54px 54px;
+}}
+#stage {{
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: scale(0.9);
+}}
+</style>
+</head>
+<body><div id="stage">{rendered}</div></body>
+</html>
+"""
+            self.preset_preview_web.setHtml(preview_html)
 
 
     def toggle_safe_area(self):
@@ -1363,6 +3732,12 @@ class EditView(QWidget):
                 if s.get("track") == track_idx:
                     self.current_selected_idx = i; self.style_scope_combo.setCurrentIndex(1); self.switch_inspector("sub"); return
             QMessageBox.information(self, "提示", f"该轨道目前没有字幕片段。")
+        elif track_type == "design":
+            for i, layer in enumerate(self.design_timeline_layers()):
+                if int(layer.get("timelineTrack", 6) or 6) == int(track_idx):
+                    self.select_design_layer_by_index(i)
+                    return
+            QMessageBox.information(self, "提示", "该设计轨道目前没有图层。")
 
     def manual_save(self):
         self.save_to_project(silent=True)
@@ -1375,6 +3750,75 @@ class EditView(QWidget):
         while parent is not None and not hasattr(parent, "project"):
             parent = parent.parent()
         return parent
+
+    def _current_project_path(self):
+        parent = self.parent_window()
+        project_data = getattr(parent, "project", None) if parent else None
+        if not isinstance(project_data, dict):
+            project_data = self.project_data if isinstance(self.project_data, dict) else {}
+        return os.path.abspath(project_data.get("project_path", "")) if project_data.get("project_path") else ""
+
+    def _natural_project_sort_key(self, path):
+        name = os.path.basename(path).lower()
+        return [int(part) if part.isdigit() else part for part in re.split(r"(\d+)", name)]
+
+    def _sibling_project_paths(self):
+        current_path = self._current_project_path()
+        if not current_path:
+            return [], -1
+        folder = os.path.dirname(current_path)
+        if not os.path.isdir(folder):
+            return [], -1
+        paths = [
+            os.path.abspath(os.path.join(folder, name))
+            for name in os.listdir(folder)
+            if name.lower().endswith(".scomp") and os.path.isfile(os.path.join(folder, name))
+        ]
+        paths.sort(key=self._natural_project_sort_key)
+        normalized_current = os.path.normcase(current_path)
+        current_index = next((i for i, path in enumerate(paths) if os.path.normcase(path) == normalized_current), -1)
+        return paths, current_index
+
+    def switch_sibling_project(self, direction):
+        paths, current_index = self._sibling_project_paths()
+        if not paths:
+            QMessageBox.information(self, "没有可切换工程", "当前工程文件夹里没有找到 .scomp 工程文件。")
+            return
+        if current_index < 0:
+            QMessageBox.information(self, "无法定位当前工程", "当前工程不在它记录的项目文件夹里，暂时不能切换上/下个视频。")
+            return
+        if len(paths) <= 1:
+            self.status_lbl.setText("当前文件夹只有 1 个工程，暂无上/下个视频可切换。")
+            return
+
+        next_index = (current_index + int(direction)) % len(paths)
+        next_path = paths[next_index]
+        try:
+            current_project = self.save_to_project(silent=True)
+            if current_project.get("project_path"):
+                save_project(current_project["project_path"], current_project)
+            self.player.pause()
+            self.audio_player.pause()
+            if hasattr(self, "play_timer"):
+                self.play_timer.stop()
+            self.is_playing = False
+            if hasattr(self, "btn_play"):
+                self.btn_play.setText("▶ 播放")
+
+            next_project = load_project(next_path)
+            self.project_data = next_project
+            parent = self.parent_window()
+            if parent and hasattr(parent, "project"):
+                parent.project = next_project
+                if hasattr(parent, "reload_rooms_from_project"):
+                    parent.reload_rooms_from_project()
+                elif hasattr(parent, "refresh_room_links"):
+                    parent.refresh_room_links()
+            else:
+                self.load_project_on_boot()
+            self.status_lbl.setText(f"已切换到 {next_index + 1}/{len(paths)}：{os.path.basename(next_path)}")
+        except Exception as e:
+            QMessageBox.warning(self, "切换失败", f"无法切换工程：\n{next_path}\n\n原因：{e}")
 
     def is_cloud_project_active(self):
         parent = self.parent_window()
@@ -1454,19 +3898,26 @@ class EditView(QWidget):
         reply = QMessageBox.warning(self, '⚠️ 清空确认', '确定要清空所有轨道数据吗？', QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
             self.player.stop(); self.audio_player.stop()
-            self.state["video_clips"] = []; self.state["audio_path"] = ""; self.state["subs_data"] = []; self.state["duration"] = 10.0
+            self.state["video_clips"] = []; self.state["audio_path"] = ""; self.state["music_path"] = ""; self.state["subs_data"] = []; self.state["duration"] = 10.0
+            self.state["signature"] = default_signature_config(self.default_style)
             self.current_selected_idx = -1; self.current_v_idx = 0; self.current_play_time = 0.0
-            self.v_wave_pixmap = None; self.a_wave_pixmap = None; self.video_thumbs = [] 
+            self.v_wave_pixmap = None; self.a_wave_pixmap = None; self.video_thumbs = []; self.last_video_image = None
+            self.preview_zoom = 1.0; self.preview_pan_x = 0.0; self.preview_pan_y = 0.0
             self.active_subs_cache.clear(); self.last_render_hash = None
             self.browser.page().runJavaScript("if(typeof syncSubs === 'function') syncSubs('[]');")
+            self._sync_preview_overlay_transform()
             self.btn_v.setText("➕ 导入第一段画面 (MP4)"); self.btn_a.setText("🎵 导入独立配音 (可选)")
-            self.text_editor.clear(); self.render_ui_list(); self.switch_inspector("empty")
+            if hasattr(self, "btn_music"):
+                self.btn_music.setText("🎼 导入配乐 (可选)")
+            self.text_editor.clear(); self.sync_signature_controls(); self.render_ui_list(); self.switch_inspector("empty")
             self.update_timeline_size(); self.update_floating_subtitle()
             if os.path.exists(CACHE_FILE): os.remove(CACHE_FILE)
             self.push_history()
             self.status_lbl.setText("✅ 工程已清空")
 
     def delete_current_clip(self):
+        if not self._ensure_edit_mode("删除字幕"):
+            return
         if self.current_selected_idx != -1:
             del self.state["subs_data"][self.current_selected_idx]; self.current_selected_idx = -1; self.switch_inspector("empty"); self.render_ui_list()
             self.update_timeline_size(); self.update_floating_subtitle(); self.auto_save_cache()
@@ -1474,6 +3925,8 @@ class EditView(QWidget):
             self.status_lbl.setText("🗑️ 字幕已删除")
 
     def add_manual_text(self):
+        if not self._ensure_edit_mode("新建字幕"):
+            return
         t = self.current_play_time
         new_sub = {"start": t, "end": t + 3.0, "text": "新建文本", "track": 0, "words": [{"text": "新建文本", "start": t, "end": t + 3.0}]}
         new_sub = self.sanitize_subs_data([new_sub])[0] 
@@ -1481,16 +3934,266 @@ class EditView(QWidget):
         self.current_selected_idx = self.state["subs_data"].index(new_sub); self.switch_inspector("sub"); self.render_ui_list(); self.update_timeline_size(); self.sync_player_to_time(t); self.auto_save_cache()
         self.push_history()
 
+    def _format_monitor_time(self, seconds):
+        seconds = max(0.0, float(seconds or 0.0))
+        minutes = int(seconds // 60)
+        secs = seconds - minutes * 60
+        return f"{minutes:02d}:{secs:04.1f}"
+
+    def _update_time_label(self):
+        if hasattr(self, "lbl_time"):
+            self.lbl_time.setText(
+                f"{self._format_monitor_time(self.current_play_time)} / {self._format_monitor_time(self.state.get('duration', 0.0))}"
+            )
+        if hasattr(self, "preview_seek_slider") and not self.preview_seek_slider.isSliderDown():
+            duration = max(0.001, float(self.state.get("duration", 0.0) or 0.0))
+            value = int(max(0.0, min(1.0, self.current_play_time / duration)) * self.preview_seek_slider.maximum())
+            self.preview_seek_slider.blockSignals(True)
+            self.preview_seek_slider.setValue(value)
+            self.preview_seek_slider.blockSignals(False)
+
+    def _preview_slider_time(self, value):
+        duration = max(0.0, float(self.state.get("duration", 0.0) or 0.0))
+        if duration <= 0:
+            return 0.0
+        maximum = max(1, self.preview_seek_slider.maximum() if hasattr(self, "preview_seek_slider") else 10000)
+        return max(0.0, min(duration, duration * float(value) / float(maximum)))
+
+    def _on_preview_seek_slider_moved(self, value):
+        self.current_play_time = self._preview_slider_time(value)
+        self._update_time_label()
+        self.timeline_widget.update_playhead(self.current_play_time)
+        self.update_floating_subtitle()
+
+    def _on_preview_seek_slider_released(self):
+        if not hasattr(self, "preview_seek_slider"):
+            return
+        self.sync_player_to_time(self._preview_slider_time(self.preview_seek_slider.value()))
+
+    def _selected_status_text(self):
+        if self.selected_track == "sub" and 0 <= self.current_selected_idx < len(self.state.get("subs_data", [])):
+            clip = self.state["subs_data"][self.current_selected_idx]
+            start = float(clip.get("start", 0.0) or 0.0)
+            end = float(clip.get("end", start) or start)
+            text = str(clip.get("text", "") or "").replace("\n", " ").strip()
+            if len(text) > 52:
+                text = text[:49] + "..."
+            return f"字幕 T{3 - int(clip.get('track', 1))} · {self._format_monitor_time(start)} - {self._format_monitor_time(end)} · {text or '空文本'}"
+        if self.selected_track == "video" and 0 <= self.current_v_idx < len(self.state.get("video_clips", [])):
+            clip = self.state["video_clips"][self.current_v_idx]
+            name = os.path.basename(clip.get("path", "")) or "视频片段"
+            return f"视频 V1 · {name} · {self._format_monitor_time(clip.get('start', 0))} - {self._format_monitor_time(clip.get('end', 0))}"
+        if self.selected_track == "audio" and self.state.get("audio_path"):
+            name = os.path.basename(self.state.get("audio_path", "")) or "配音"
+            a_trim = self.state.get("a_trim", [0.0, 0.0])
+            a_start = a_trim[0] if len(a_trim) > 0 else 0.0
+            a_end = a_trim[1] if len(a_trim) > 1 else a_start
+            return f"音频 A2 · {name} · {self._format_monitor_time(a_start)} - {self._format_monitor_time(a_end)}"
+        if self.selected_track == "design" and self.selected_design_layer_id:
+            layer = self._selected_design_layer()
+            if layer:
+                start = float(layer.get("start", 0.0) or 0.0)
+                end = float(layer.get("end", 0.0) or 0.0)
+                if end <= start:
+                    end = float(self._design_page().get("duration", self.state.get("duration", 5.0)) or 5.0)
+                return f"设计 D{int(layer.get('timelineTrack', 6) or 6) - 5} · {layer.get('name', '图层')} · {self._format_monitor_time(start)} - {self._format_monitor_time(end)}"
+        return "未选中片段"
+
+    def _update_workspace_status(self):
+        if not hasattr(self, "lbl_workspace_stats"):
+            return
+        clips = self.state.get("video_clips", []) or []
+        subs = self.state.get("subs_data", []) or []
+        audio_on = bool(self.state.get("audio_path"))
+        design_layers = self.design_timeline_layers() if hasattr(self, "design_timeline_layers") else []
+        duration = float(self.state.get("duration", 0.0) or 0.0)
+        sig = normalize_signature_config(self.state.get("signature"), self.default_style)
+        sig_text = "署名 ON" if sig.get("enabled") and str(sig.get("text", "")).strip() else "署名 OFF"
+        self.lbl_workspace_stats.setText(
+            f"{len(clips)} 视频 · {len(subs)} 字幕 · {len(design_layers)} 设计 · {'配音 ON' if audio_on else '配音 OFF'} · {self._format_monitor_time(duration)}"
+        )
+        self.lbl_monitor_meta.setText(f"{self.proj_width}x{self.proj_height} · {self.zoom_factor:.0f} px/s · VIEW {self.preview_zoom * 100:.0f}% · {sig_text}")
+        if hasattr(self, "lbl_timeline_summary"):
+            self.lbl_timeline_summary.setText(
+                f"{len(clips)}V · {len(subs)}T · {len(design_layers)}D · {'A2' if audio_on else 'no A2'} · {self._format_monitor_time(duration)} · {self.zoom_factor:.0f}px/s"
+            )
+        if hasattr(self, "btn_timeline_snap"):
+            self.btn_timeline_snap.blockSignals(True)
+            self.btn_timeline_snap.setChecked(bool(self.timeline_snap_enabled))
+            self.btn_timeline_snap.setText("SNAP ON" if self.timeline_snap_enabled else "SNAP OFF")
+            self.btn_timeline_snap.blockSignals(False)
+        if hasattr(self, "lbl_zoom"):
+            self.lbl_zoom.setText(f"{self.zoom_factor:.0f} px/s")
+        if hasattr(self, "lbl_preview_zoom"):
+            self.lbl_preview_zoom.setText(f"{self.preview_zoom * 100:.0f}%")
+        if hasattr(self, "lbl_selected_status"):
+            self.lbl_selected_status.setText(self._selected_status_text())
+        if hasattr(self, "lbl_edit_health"):
+            self.lbl_edit_health.setText(f"{self._format_monitor_time(self.current_play_time)} / {self._format_monitor_time(duration)}")
+
+    def seek_relative(self, delta):
+        target = max(0.0, min(float(self.state.get("duration", 0.0) or 0.0), self.current_play_time + float(delta)))
+        self.sync_player_to_time(target)
+
+    def _shortcut_editing_guard(self):
+        focused = QApplication.focusWidget()
+        return not isinstance(focused, (QTextEdit, QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox))
+
+    def toggle_play_from_shortcut(self):
+        if self._shortcut_editing_guard():
+            self.toggle_play()
+
+    def seek_relative_from_shortcut(self, delta):
+        if self._shortcut_editing_guard():
+            self.seek_relative(delta)
+
+    def adjust_preview_zoom_from_shortcut(self, direction):
+        if self._shortcut_editing_guard():
+            self.adjust_preview_zoom(direction)
+
+    def reset_preview_view_from_shortcut(self):
+        if self._shortcut_editing_guard():
+            self.reset_preview_view()
+
+    def adjust_timeline_zoom(self, factor):
+        self.zoom_factor = max(10.0, min(300.0, self.zoom_factor * float(factor)))
+        self.update_timeline_size()
+
+    def set_timeline_snap_enabled(self, enabled):
+        self.timeline_snap_enabled = bool(enabled)
+        self.update_timeline_size()
+
+    def _clamp_preview_pan(self):
+        if hasattr(self, "preview_workspace"):
+            w = max(1, self.preview_workspace.width())
+            h = max(1, self.preview_workspace.height())
+            stage_w, stage_h = self.preview_workspace.stage_size_for_zoom(self.preview_zoom)
+            keep_x = min(140.0, stage_w * 0.35)
+            keep_y = min(140.0, stage_h * 0.35)
+            max_x = max(0.0, (w + stage_w) * 0.5 - keep_x)
+            max_y = max(0.0, (h + stage_h) * 0.5 - keep_y)
+        elif hasattr(self, "video_label"):
+            w = max(1, self.video_label.width())
+            h = max(1, self.video_label.height())
+            if self.preview_zoom <= 1.001:
+                self.preview_pan_x = 0.0
+                self.preview_pan_y = 0.0
+                return
+            max_x = (self.preview_zoom - 1.0) * w * 0.5
+            max_y = (self.preview_zoom - 1.0) * h * 0.5
+        else:
+            return
+        self.preview_pan_x = max(-max_x, min(max_x, self.preview_pan_x))
+        self.preview_pan_y = max(-max_y, min(max_y, self.preview_pan_y))
+
+    def _sync_preview_overlay_transform(self, sync_js=True, update_status=True):
+        if not hasattr(self, "browser"):
+            return
+        self._clamp_preview_pan()
+        if hasattr(self, "preview_workspace"):
+            self.preview_workspace.set_view_transform(self.preview_zoom, self.preview_pan_x, self.preview_pan_y)
+        if sync_js:
+            js = (
+                "if(typeof setMonitorView === 'function') "
+                f"setMonitorView({self.preview_zoom:.4f}, {self.preview_pan_x:.3f}, {self.preview_pan_y:.3f});"
+            )
+            self.browser.page().runJavaScript(js)
+        if update_status:
+            self._update_workspace_status()
+
+    def adjust_preview_zoom_from_stage(self, direction, stage_x=0.0, stage_y=0.0):
+        if hasattr(self, "preview_workspace") and hasattr(self, "browser"):
+            stage_pos = self.preview_workspace.child_widget.pos()
+            browser_pos = self.browser.pos()
+            self.adjust_preview_zoom(
+                direction,
+                stage_pos.x() + browser_pos.x() + float(stage_x or 0.0),
+                stage_pos.y() + browser_pos.y() + float(stage_y or 0.0),
+            )
+        else:
+            self.adjust_preview_zoom(direction, stage_x, stage_y)
+
+    def adjust_preview_zoom(self, direction, anchor_x=None, anchor_y=None):
+        old_zoom = max(0.25, float(self.preview_zoom or 1.0))
+        factor = 1.18 if float(direction) > 0 else 1.0 / 1.18
+        new_zoom = max(0.25, min(8.0, old_zoom * factor))
+        if abs(new_zoom - old_zoom) < 0.001:
+            return
+        if hasattr(self, "preview_workspace"):
+            cx = self.preview_workspace.width() * 0.5
+            cy = self.preview_workspace.height() * 0.5
+            ax = float(anchor_x) if anchor_x is not None else cx
+            ay = float(anchor_y) if anchor_y is not None else cy
+            self.preview_pan_x = (self.preview_pan_x - (ax - cx)) * (new_zoom / old_zoom) + (ax - cx)
+            self.preview_pan_y = (self.preview_pan_y - (ay - cy)) * (new_zoom / old_zoom) + (ay - cy)
+        elif hasattr(self, "video_label"):
+            cx = self.video_label.width() * 0.5
+            cy = self.video_label.height() * 0.5
+            ax = float(anchor_x or cx)
+            ay = float(anchor_y or cy)
+            self.preview_pan_x = (self.preview_pan_x - (ax - cx)) * (new_zoom / old_zoom) + (ax - cx)
+            self.preview_pan_y = (self.preview_pan_y - (ay - cy)) * (new_zoom / old_zoom) + (ay - cy)
+        self.preview_zoom = new_zoom
+        self._clamp_preview_pan()
+        self._sync_preview_overlay_transform()
+        self.redraw_video_preview()
+
+    def pan_preview_view(self, dx, dy):
+        self.preview_pan_x += float(dx or 0.0)
+        self.preview_pan_y += float(dy or 0.0)
+        self._clamp_preview_pan()
+        self._sync_preview_overlay_transform(sync_js=False, update_status=False)
+
+    def finalize_preview_pan(self):
+        self._sync_preview_overlay_transform(sync_js=True, update_status=True)
+
+    def reset_preview_view(self):
+        self.preview_zoom = 1.0
+        self.preview_pan_x = 0.0
+        self.preview_pan_y = 0.0
+        self._sync_preview_overlay_transform()
+        self.redraw_video_preview()
+
+    def _apply_preview_transform_to_pixmap(self, base_pixmap):
+        if not base_pixmap or base_pixmap.isNull():
+            return base_pixmap
+        self._clamp_preview_pan()
+        if self.preview_zoom <= 1.001 and abs(self.preview_pan_x) < 0.5 and abs(self.preview_pan_y) < 0.5:
+            return base_pixmap
+        w = base_pixmap.width()
+        h = base_pixmap.height()
+        result_pix = QPixmap(w, h)
+        result_pix.fill(Qt.GlobalColor.black)
+        painter = QPainter(result_pix)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        painter.translate(w * 0.5 + self.preview_pan_x, h * 0.5 + self.preview_pan_y)
+        painter.scale(self.preview_zoom, self.preview_zoom)
+        painter.drawPixmap(int(-w * 0.5), int(-h * 0.5), base_pixmap)
+        painter.end()
+        return result_pix
+
     def update_timeline_size(self):
         self.timeline_widget.sync_from_controller()
+        self._update_workspace_status()
 
     def switch_inspector(self, track_type):
         self.selected_track = track_type
+        if track_type in ("video", "audio", "sub", "design"):
+            self.show_canvas_context_toolbar("subtitle" if track_type == "sub" else track_type)
+            if hasattr(self, "right_panel_title"):
+                self.right_panel_title.setText({"video": "视频编辑", "audio": "音频选项", "sub": "字幕选项", "design": "设计图层"}.get(track_type, "参数"))
+            if hasattr(self, "right_panel") and track_type != "design":
+                self.set_right_sidebar_visible(True)
         if track_type == "video": self.insp_stack.setCurrentIndex(2); self.sync_inspector_to_video() 
         elif track_type == "audio": self.insp_stack.setCurrentIndex(3)
         elif track_type == "sub" and self.current_selected_idx != -1: self.insp_stack.setCurrentIndex(1); self.sync_inspector_to_clip()
-        else: self.insp_stack.setCurrentIndex(0); self.current_selected_idx = -1
-        self.tabs.setCurrentIndex(1); self.timeline_widget.sync_from_controller()
+        elif track_type == "design": self.sync_design_panel_controls()
+        else:
+            self.insp_stack.setCurrentIndex(0); self.current_selected_idx = -1
+            self.hide_canvas_context_toolbar()
+        if track_type != "design":
+            self.tabs.setCurrentIndex(1)
+        self.timeline_widget.sync_from_controller(); self._update_workspace_status()
 
     def sync_inspector_to_video(self):
         if not self.state.get("video_clips") or self.current_v_idx < 0 or self.current_v_idx >= len(self.state["video_clips"]): return
@@ -1610,7 +4313,7 @@ class EditView(QWidget):
         self._apply_font_license_filter()
         self._update_font_preview()
 
-    def _apply_font_license_filter(self):
+    def _apply_font_license_filter(self, *args):
         if not hasattr(self, "font_var"):
             return
         view = self.font_var.view()
@@ -1747,6 +4450,8 @@ class EditView(QWidget):
         st = clip.get("style", clip) 
         
         controls = [self.sub_start_spin, self.sub_end_spin, self.pos_x_spin, self.pos_x_slider, self.pos_y_spin, self.pos_y_slider, self.size_slider, self.size_spin, self.box_width_slider, self.box_width_spin, self.box_height_slider, self.box_height_spin, self.max_lines_slider, self.max_lines_spin, self.alpha_slider, self.alpha_spin, self.radius_slider, self.radius_spin, self.padding_slider, self.padding_spin, self.bg_pad_left_slider, self.bg_pad_left_spin, self.bg_pad_right_slider, self.bg_pad_right_spin, self.bg_pad_top_slider, self.bg_pad_top_spin, self.bg_pad_bottom_slider, self.bg_pad_bottom_spin, self.hl_alpha_slider, self.hl_alpha_spin, self.hl_radius_slider, self.hl_radius_spin, self.hl_padding_slider, self.hl_padding_spin, self.hl_pad_left_slider, self.hl_pad_left_spin, self.hl_pad_right_slider, self.hl_pad_right_spin, self.hl_pad_top_slider, self.hl_pad_top_spin, self.hl_pad_bottom_slider, self.hl_pad_bottom_spin, self.spacing_slider, self.spacing_spin, self.word_spacing_slider, self.word_spacing_spin, self.lineh_slider, self.lineh_spin, self.stroke_slider, self.stroke_spin, self.stroke_o_slider, self.stroke_o_spin, self.stroke_soft_slider, self.stroke_soft_spin, self.rot_slider, self.rot_spin, self.glow_size_slider, self.glow_size_spin, self.sh_x_slider, self.sh_x_spin, self.sh_y_slider, self.sh_y_spin, self.sh_blur_slider, self.sh_blur_spin, self.sh_a_slider, self.sh_a_spin, self.pop_speed_slider, self.pop_speed_spin, self.pop_bounce_slider, self.pop_bounce_spin, self.inactive_alpha_slider, self.inactive_alpha_spin, self.mask_top_slider, self.mask_top_spin, self.mask_bot_slider, self.mask_bot_spin, self.merge_bridge_width_slider, self.merge_bridge_width_spin, self.merge_bridge_height_slider, self.merge_bridge_height_spin, self.merge_bridge_alpha_slider, self.merge_bridge_alpha_spin, self.transform_combo, self.align_combo, self.anim_combo, self.font_motion_combo, self.hl_motion_combo, self.text_texture_combo, self.bg_mode_combo, self.layout_mode_combo, self.layout_variant_combo, self.box_layout_combo, self.emphasis_slider, self.emphasis_spin]
+        if hasattr(self, "font_var"):
+            controls.append(self.font_var)
         for c in controls: c.blockSignals(True)
         
         self.sub_start_spin.setValue(float(clip.get("start", 0)))
@@ -1822,10 +4527,10 @@ class EditView(QWidget):
         self.align_combo.setCurrentText(a_map.get(st.get("text_align", "center")))
         lm_map = {"standard": "标准排版", "smart_caption": "智能图文排版", "mixed_reel": "混合自然排版", "contrast": "大小对比排版", "triple": "三层模板排版", "reel_stack": "前后大小叙事排版", "random_focus": "随机重点排版", "side_steps": "左右排开排版", "axis_stack": "中轴排比排版"}
         self.layout_mode_combo.setCurrentText(lm_map.get(st.get("layout_mode", "standard"), "标准排版"))
-        lv_map = {"auto": "自动变化", "small-big-small": "小-大-小", "big-small-mix": "大-小-混排", "mix-big-small": "混排-大-小", "axis-split-tail": "中轴结尾分两边", "axis-123": "中轴 1-2-3 排"}
+        lv_map = {"auto": "自动变化", "small-big-small": "小-大-小", "big-small-mix": "大-小-混排", "mix-big-small": "混排-大-小", "head-letter-large": "首字母变大叙事", "head-large": "开头变大叙事", "head-uppercase": "开头变大叙事", "tail-large": "尾部变大叙事", "tail-uppercase": "尾部变大叙事", "axis-split-tail": "中轴结尾分两边", "axis-123": "中轴 1-2-3 排"}
         self.layout_variant_combo.setCurrentText(lv_map.get(st.get("layout_variant", "auto"), "自动变化"))
         self.box_layout_combo.setCurrentText("固定窗口自动换行" if st.get("box_layout", "auto") == "fixed" else "自适应文字宽度")
-        anim_map = {"pop": "🎉 逐字弹跳 (Pop-in)", "fade": "☁️ 柔和淡入 (Fade)", "blur_fade": "🌫️ 单词模糊渐入 (Blur Fade)", "word_wipe": "▌单词遮罩右移键入", "wipe_right": "➡️ 平滑遮罩右移", "roll_up": "⬆️ 电影级向上滚动 (Roll Up)", "slam_in": "💥 远处砸入 (Slam In)", "grow_in": "🔎 慢慢放大出字 (Grow In)", "scatter_in": "🧲 词语散开入场 (Scatter In)", "letter_scatter_in": "🔤 字字分散入场 (Letter Scatter)", "camera_push": "🎥 朝镜头推进 (Camera Push)", "depth_push": "🧊 3D远近推进 (Depth Push)", "none": "🚫 无动画 (None)"}
+        anim_map = {"pop": "🎉 逐字弹跳 (Pop-in)", "fade": "☁️ 柔和淡入 (Fade)", "blur_fade": "🌫️ 单词模糊渐入 (Blur Fade)", "word_wipe": "▌单词遮罩右移键入", "wipe_right": "➡️ 平滑遮罩右移", "roll_up": "⬆️ 电影级向上滚动 (Roll Up)", "slam_in": "💥 远处砸入 (Slam In)", "grow_in": "🔎 慢慢放大出字 (Grow In)", "scatter_in": "🧲 词语散开入场 (Scatter In)", "letter_scatter_in": "🔤 字字分散入场 (Letter Scatter)", "camera_push": "🎥 朝镜头推进 (Camera Push)", "depth_push": "🧊 3D远近推进 (Depth Push)", "holy_breath": "🕊️ 圣息慢显 (Holy Breath)", "none": "🚫 无动画 (None)"}
         self.anim_combo.setCurrentText(anim_map.get(st.get("anim_type", "pop"), anim_map["pop"]))
         font_motion_map = {"none": "字体动画: 无效果", "wave": "字体动画: 波浪感", "ripple3d": "字体动画: 水波立体流动", "breathe": "字体动画: 慢呼吸放大", "drift": "字体动画: 词语慢慢分散", "pulse": "字体动画: 忽大忽小跳动"}
         self.font_motion_combo.setCurrentText(font_motion_map.get(st.get("font_motion", "none"), font_motion_map["none"]))
@@ -1847,11 +4552,14 @@ class EditView(QWidget):
             b_idx = 2
         elif bm == "full_frame":
             b_idx = 4
+        elif bm == "cinematic_frame":
+            b_idx = 5
         else:
             b_idx = 3
         self.bg_mode_combo.setCurrentIndex(b_idx)
 
         for c in controls: c.blockSignals(False)
+        self._apply_font_license_filter()
         self._update_font_preview()
         
         self.btn_color_txt.setStyleSheet(f"background-color: {st.get('color_txt', '#FFFFFF')}; color: black; padding: 5px;")
@@ -1865,12 +4573,17 @@ class EditView(QWidget):
         else: self.btn_color_hl.setEnabled(False); self.btn_color_hl.setStyleSheet("background-color: #313244; color: gray; padding: 5px;")
 
     def _apply_styles_to_targets(self, target_type, hex_col=None):
-        if self.current_selected_idx == -1: return
-        current_clip = self.state["subs_data"][self.current_selected_idx]
-        scope = self.style_scope_combo.currentIndex()
-        if scope == 0: target_clips = self.state["subs_data"]
-        elif scope == 1: target_clips = [c for c in self.state["subs_data"] if c.get("track") == current_clip.get("track")]
-        else: target_clips = [current_clip]
+        if not self.state.get("subs_data"):
+            return
+        if self.current_selected_idx == -1:
+            current_clip = self.state["subs_data"][0]
+            target_clips = self.state["subs_data"]
+        else:
+            current_clip = self.state["subs_data"][self.current_selected_idx]
+            scope = self.style_scope_combo.currentIndex()
+            if scope == 0: target_clips = self.state["subs_data"]
+            elif scope == 1: target_clips = [c for c in self.state["subs_data"] if c.get("track") == current_clip.get("track")]
+            else: target_clips = [current_clip]
 
         for c in target_clips:
             if "style" not in c: c["style"] = {}
@@ -1924,6 +4637,10 @@ class EditView(QWidget):
                 c["style"]["merge_bridge_height"] = self.merge_bridge_height_slider.value()
                 c["style"]["merge_bridge_alpha"] = self.merge_bridge_alpha_slider.value()
                 mode_txt = self.layout_mode_combo.currentText()
+                variant_txt = self.layout_variant_combo.currentText()
+                head_letter_large_variant = "首字母变大" in variant_txt
+                head_large_variant = "开头变大" in variant_txt or "首词变大" in variant_txt
+                tail_large_variant = "尾部变大" in variant_txt or "尾词变大" in variant_txt
                 if "智能图文" in mode_txt:
                     c["style"]["layout_mode"] = "smart_caption"
                 elif "混合自然" in mode_txt:
@@ -1942,8 +4659,7 @@ class EditView(QWidget):
                     c["style"]["layout_mode"] = "triple"
                 else:
                     c["style"]["layout_mode"] = "standard"
-                variant_txt = self.layout_variant_combo.currentText()
-                c["style"]["layout_variant"] = "small-big-small" if "小-大-小" in variant_txt else "big-small-mix" if "大-小-混排" in variant_txt else "mix-big-small" if "混排-大-小" in variant_txt else "axis-split-tail" if "结尾分" in variant_txt else "axis-123" if "1-2-3" in variant_txt else "auto"
+                c["style"]["layout_variant"] = "head-letter-large" if head_letter_large_variant else "head-large" if head_large_variant else "tail-large" if tail_large_variant else "small-big-small" if "小-大-小" in variant_txt else "big-small-mix" if "大-小-混排" in variant_txt else "mix-big-small" if "混排-大-小" in variant_txt else "axis-split-tail" if "结尾分" in variant_txt else "axis-123" if "1-2-3" in variant_txt else "auto"
                 c["style"]["box_layout"] = "fixed" if "固定窗口" in self.box_layout_combo.currentText() else "auto"
                 c["style"]["emphasis_scale"] = self.emphasis_slider.value()
                 
@@ -1963,7 +4679,9 @@ class EditView(QWidget):
                 else:
                     c["style"]["text_align"] = "center"
                 anc = self.anim_combo.currentText()
-                if "Slam" in anc or "砸入" in anc:
+                if "Holy Breath" in anc or "圣息" in anc:
+                    c["style"]["anim_type"] = "holy_breath"
+                elif "Slam" in anc or "砸入" in anc:
                     c["style"]["anim_type"] = "slam_in"
                 elif "Grow" in anc or "慢慢放大" in anc:
                     c["style"]["anim_type"] = "grow_in"
@@ -2027,6 +4745,8 @@ class EditView(QWidget):
                     c["style"]["bg_mode"] = "sweep"
                 elif "全部框架" in b_txt:
                     c["style"]["bg_mode"] = "full_frame"
+                elif "电影玻璃" in b_txt or "Cinematic Glass" in b_txt:
+                    c["style"]["bg_mode"] = "cinematic_frame"
                 else:
                     c["style"]["bg_mode"] = "block"
 
@@ -2034,7 +4754,11 @@ class EditView(QWidget):
             if "style" in current_clip and k in current_clip["style"]: 
                 self.default_style[k] = current_clip["style"][k]
 
-        self.btn_color_hl.setEnabled(self.chk_use_hl.isChecked()); self.sync_inspector_to_clip(); self.update_floating_subtitle(); self.auto_save_cache()
+        self.default_style["font"] = self.font_var.currentFont().family() if hasattr(self, "font_var") else self.default_style.get("font", "Segoe UI")
+        self.btn_color_hl.setEnabled(self.chk_use_hl.isChecked())
+        if self.current_selected_idx != -1:
+            self.sync_inspector_to_clip()
+        self.update_floating_subtitle(); self.auto_save_cache()
 
     def _pick_color(self, target):
         color = QColorDialog.getColor()
@@ -2079,6 +4803,247 @@ class EditView(QWidget):
     def _on_vid_prop_change(self): self.state["v_scale"] = self.v_scale_slider.value(); self.state["v_volume"] = self.v_vol_slider.value(); self.audio_output.setVolume(self.state["v_volume"] / 100.0); self.sync_player_to_time(self.current_play_time); self.auto_save_cache()
     def _on_aud_prop_change(self): self.state["a_volume"] = self.a_vol_slider.value(); self.audio_track_output.setVolume(self.state["a_volume"] / 100.0); self.auto_save_cache()
 
+    def _signature_state(self):
+        sig = normalize_signature_config(self.state.get("signature"), self.default_style)
+        self.state["signature"] = sig
+        return sig
+
+    def _signature_label_to_value(self, label):
+        return {
+            "右上角": "top_right",
+            "左上角": "top_left",
+            "右下角": "bottom_right",
+            "左下角": "bottom_left",
+            "顶部居中": "top_center",
+            "底部居中": "bottom_center",
+            "自定义位置": "custom",
+        }.get(label, "top_right")
+
+    def _signature_value_to_label(self, value):
+        return {
+            "top_right": "右上角",
+            "top_left": "左上角",
+            "bottom_right": "右下角",
+            "bottom_left": "左下角",
+            "top_center": "顶部居中",
+            "bottom_center": "底部居中",
+            "custom": "自定义位置",
+        }.get(value, "右上角")
+
+    def _signature_bg_label_to_value(self, label):
+        if "无背景" in label:
+            return "none"
+        if "纯色" in label or "底框" in label:
+            return "block"
+        return "cinematic_frame"
+
+    def _signature_bg_value_to_label(self, value):
+        if value == "none":
+            return "无背景"
+        if value == "block":
+            return "纯色底框"
+        return "柔光玻璃背景"
+
+    def _update_signature_color_buttons(self, style):
+        if not hasattr(self, "btn_signature_text_color"):
+            return
+        txt = style.get("color_txt", "#FFFFFF")
+        bg = style.get("bg_color", "#0B1020")
+        self.btn_signature_text_color.setStyleSheet(f"background-color: {txt}; color: #11111b; font-weight: bold; border-radius: 6px; padding: 7px 10px;")
+        self.btn_signature_bg_color.setStyleSheet(f"background-color: {bg}; color: #ffffff; font-weight: bold; border-radius: 6px; padding: 7px 10px;")
+
+    def sync_signature_controls(self):
+        if not hasattr(self, "signature_text_input"):
+            return
+        sig = self._signature_state()
+        widgets = [
+            self.chk_signature_enabled,
+            self.signature_text_input,
+            self.signature_position_combo,
+            self.signature_size_slider,
+            self.signature_size_spin,
+            self.signature_margin_x_slider,
+            self.signature_margin_x_spin,
+            self.signature_margin_y_slider,
+            self.signature_margin_y_spin,
+            self.signature_bg_combo,
+            self.signature_bg_alpha_slider,
+            self.signature_bg_alpha_spin,
+            self.signature_bg_radius_slider,
+            self.signature_bg_radius_spin,
+            self.signature_bg_padding_slider,
+            self.signature_bg_padding_spin,
+        ]
+        for w in widgets:
+            w.blockSignals(True)
+        self.chk_signature_enabled.setChecked(bool(sig.get("enabled")))
+        self.signature_text_input.setText(str(sig.get("text", "") or ""))
+        self.signature_position_combo.setCurrentText(self._signature_value_to_label(sig.get("placement", "top_right")))
+        size = int(sig.get("style", {}).get("size", 42) or 42)
+        self.signature_size_spin.setValue(size)
+        self.signature_size_slider.setValue(size)
+        margin_x = float(sig.get("margin_x", 5.0) or 0.0)
+        margin_y = float(sig.get("margin_y", 4.0) or 0.0)
+        self.signature_margin_x_spin.setValue(margin_x)
+        self.signature_margin_x_slider.setValue(int(margin_x * 100))
+        self.signature_margin_y_spin.setValue(margin_y)
+        self.signature_margin_y_slider.setValue(int(margin_y * 100))
+        style = sig.get("style", {})
+        self.signature_bg_combo.setCurrentText(self._signature_bg_value_to_label(style.get("bg_mode", "cinematic_frame")))
+        bg_alpha = int(style.get("bg_alpha", 45) or 0)
+        bg_radius = int(style.get("bg_radius", 26) or 0)
+        bg_padding = int(style.get("bg_padding", 10) or 0)
+        self.signature_bg_alpha_spin.setValue(bg_alpha)
+        self.signature_bg_alpha_slider.setValue(bg_alpha)
+        self.signature_bg_radius_spin.setValue(bg_radius)
+        self.signature_bg_radius_slider.setValue(bg_radius)
+        self.signature_bg_padding_spin.setValue(bg_padding)
+        self.signature_bg_padding_slider.setValue(bg_padding)
+        self._update_signature_color_buttons(style)
+        for w in widgets:
+            w.blockSignals(False)
+
+    def _on_signature_change(self, *args):
+        if not hasattr(self, "signature_text_input"):
+            return
+        sig = self._signature_state()
+        sig["enabled"] = self.chk_signature_enabled.isChecked()
+        sig["text"] = self.signature_text_input.text().strip()
+        sig["placement"] = self._signature_label_to_value(self.signature_position_combo.currentText())
+        sig["margin_x"] = float(self.signature_margin_x_spin.value())
+        sig["margin_y"] = float(self.signature_margin_y_spin.value())
+        sig.setdefault("style", default_signature_config(self.default_style)["style"])
+        sig["style"]["size"] = int(self.signature_size_spin.value())
+        sig["style"]["bg_mode"] = self._signature_bg_label_to_value(self.signature_bg_combo.currentText())
+        sig["style"]["bg_alpha"] = int(self.signature_bg_alpha_spin.value())
+        sig["style"]["bg_radius"] = int(self.signature_bg_radius_spin.value())
+        sig["style"]["bg_padding"] = int(self.signature_bg_padding_spin.value())
+        sig["style"]["bg_pad_left"] = int(self.signature_bg_padding_spin.value() * 1.8)
+        sig["style"]["bg_pad_right"] = int(self.signature_bg_padding_spin.value() * 1.8)
+        sig["style"]["bg_pad_top"] = max(0, int(self.signature_bg_padding_spin.value() * 0.5))
+        sig["style"]["bg_pad_bottom"] = max(0, int(self.signature_bg_padding_spin.value() * 0.55))
+        if sig["placement"] in ("top_right", "bottom_right"):
+            sig["style"]["text_align"] = "right"
+        elif sig["placement"] in ("top_left", "bottom_left"):
+            sig["style"]["text_align"] = "left"
+        else:
+            sig["style"]["text_align"] = "center"
+        self.state["signature"] = sig
+        self._update_signature_color_buttons(sig["style"])
+        self.last_render_hash = None
+        self.update_floating_subtitle()
+        self._update_workspace_status()
+        self.auto_save_cache()
+
+    def _pick_signature_color(self, target):
+        sig = self._signature_state()
+        sig.setdefault("style", default_signature_config(self.default_style)["style"])
+        current = sig["style"].get("color_txt" if target == "text" else "bg_color", "#FFFFFF")
+        color = QColorDialog.getColor(QColor(current), self, "选择署名颜色")
+        if not color.isValid():
+            return
+        if target == "text":
+            sig["style"]["color_txt"] = color.name()
+            sig["style"]["color_hl"] = color.name()
+        else:
+            sig["style"]["bg_color"] = color.name()
+        self.state["signature"] = sig
+        self.sync_signature_controls()
+        self.last_render_hash = None
+        self.update_floating_subtitle()
+        self.auto_save_cache()
+
+    def save_signature_preset(self):
+        sig = copy.deepcopy(self._signature_state())
+        name, ok = QInputDialog.getText(self, "存署名模板", "给这个署名模板起个名字:")
+        if not ok or not name.strip():
+            return
+        if name.strip() in self._built_in_signature_presets():
+            return QMessageBox.warning(self, "提示", "这个名字是内置模板，请换一个名字保存。")
+        presets = self.load_signature_presets()
+        presets[name.strip()] = sig
+        self.save_signature_presets(presets)
+        self.refresh_signature_preset_combo()
+        self.notify_batch_presets_changed(signature_name=name.strip())
+        idx = self.signature_template_combo.findData(name.strip(), Qt.ItemDataRole.UserRole)
+        if idx >= 0:
+            self.signature_template_combo.setCurrentIndex(idx)
+        self.status_lbl.setText(f"✅ 署名模板 '{name.strip()}' 已保存")
+
+    def apply_signature_preset(self):
+        if not hasattr(self, "signature_template_combo"):
+            return
+        name = self.signature_template_combo.currentData(Qt.ItemDataRole.UserRole)
+        presets = self.load_signature_presets()
+        if not name or name not in presets:
+            return
+        current_text = self._signature_state().get("text", "")
+        sig = normalize_signature_config(copy.deepcopy(presets[name]), self.default_style)
+        if current_text and not sig.get("text"):
+            sig["text"] = current_text
+        sig["enabled"] = True
+        self.state["signature"] = sig
+        self.sync_signature_controls()
+        self.last_render_hash = None
+        self.update_floating_subtitle()
+        self.auto_save_cache()
+        self.status_lbl.setText(f"✅ 已应用署名模板 '{name}'")
+
+    def delete_signature_preset(self):
+        name = self.signature_template_combo.currentData(Qt.ItemDataRole.UserRole) if hasattr(self, "signature_template_combo") else ""
+        built_ins = set(self._built_in_signature_presets().keys())
+        if not name or name in built_ins:
+            return QMessageBox.information(self, "提示", "内置署名模板不能删除。")
+        presets = self.load_signature_presets()
+        if name not in presets:
+            return
+        reply = QMessageBox.question(self, "删除署名模板", f'确定要删除署名模板 "{name}" 吗？', QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        del presets[name]
+        self.save_signature_presets(presets)
+        self.refresh_signature_preset_combo()
+        self.notify_batch_presets_changed()
+        self.status_lbl.setText(f"🗑️ 署名模板 '{name}' 已删除")
+
+    def reset_signature_template(self):
+        current_text = ""
+        current_enabled = False
+        if isinstance(self.state.get("signature"), dict):
+            current_text = self.state["signature"].get("text", "")
+            current_enabled = bool(self.state["signature"].get("enabled"))
+        sig = default_signature_config(self.default_style)
+        sig["text"] = current_text
+        sig["enabled"] = current_enabled
+        self.state["signature"] = sig
+        self.sync_signature_controls()
+        self.last_render_hash = None
+        self.update_floating_subtitle()
+        self.auto_save_cache()
+
+    def capture_signature_template(self):
+        sig = self._signature_state()
+        if 0 <= self.current_selected_idx < len(self.state.get("subs_data", [])):
+            clip = self.state["subs_data"][self.current_selected_idx]
+            sig["style"] = copy.deepcopy(clip.get("style", self.default_style))
+            sig["style"]["anim_type"] = "none"
+            sig["style"]["font_motion"] = "none"
+            sig["style"]["use_hl"] = False
+            sig["pos_x"] = float(clip.get("pos_x", 0.0) or 0.0)
+            sig["pos_y"] = float(clip.get("pos_y", -42.0) or -42.0)
+            sig["placement"] = "custom"
+            if not sig.get("text"):
+                sig["text"] = str(clip.get("text", "") or "").strip()
+        else:
+            sig["style"] = default_signature_config(self.default_style)["style"]
+            sig["placement"] = "top_right"
+        sig["enabled"] = True
+        self.state["signature"] = sig
+        self.sync_signature_controls()
+        self.last_render_hash = None
+        self.update_floating_subtitle()
+        self.auto_save_cache()
+
     def generate_waveform(self, path, attr_name):
         if not path or not os.path.exists(path): return
         def _task():
@@ -2094,32 +5059,97 @@ class EditView(QWidget):
     def _apply_waveform(self, img_path, attr_name): 
         setattr(self, attr_name, QPixmap(img_path)); self.timeline_widget.sync_from_controller()
 
+    def set_audio_path_from_file(self, file_path):
+        if not file_path or not os.path.exists(file_path):
+            return False
+        file_path = self.cloud_import_media_if_needed(file_path)
+        self.state["audio_path"] = file_path
+        self.btn_a.setText("✅ " + os.path.basename(file_path)[:15])
+        self.audio_player.setSource(QUrl.fromLocalFile(file_path))
+        a_dur = get_exact_duration(file_path)
+        if a_dur > 0:
+            self.state["a_trim"] = [0.0, a_dur]
+        self._recalc_duration()
+        self.generate_waveform(file_path, "a_wave_pixmap")
+        self.update_timeline_size()
+        self.auto_save_cache()
+        if self.edit_mode:
+            self.switch_inspector("audio")
+        self.status_lbl.setText("🎵 音频素材已加入配音轨。")
+        return True
+
+    def add_video_clip_from_path(self, file_path, start_t=None):
+        if not file_path or not os.path.exists(file_path):
+            return False
+        file_path = self.cloud_import_media_if_needed(file_path)
+        dur = get_exact_duration(file_path)
+        if dur <= 0:
+            dur = 5.0
+        clips = self.state.get("video_clips", [])
+        if start_t is None:
+            start_t = clips[-1]["end"] if clips else 0.0
+        else:
+            start_t = max(0.0, float(start_t or 0.0))
+        new_clip = {
+            "path": file_path,
+            "start": start_t,
+            "end": start_t + dur,
+            "dur": dur,
+            "source_in": 0.0,
+            "source_out": dur,
+            "transition": {"type": "cut", "duration": 0.0}
+        }
+        clips.append(new_clip)
+        clips.sort(key=lambda c: float(c.get("start", 0.0) or 0.0))
+        self.state["video_clips"] = clips
+        self.btn_v.setText("✅ 已导原素材")
+        self.current_v_idx = clips.index(new_clip)
+        self.current_selected_idx = -1
+        if len(clips) == 1 or not self.player.source().isValid():
+            self.player.setSource(QUrl.fromLocalFile(file_path))
+            self.player.setLoops(QMediaPlayer.Loops.Infinite)
+            self.on_resolution_changed(self.res_combo.currentText())
+            self.generate_waveform(file_path, "v_wave_pixmap")
+            threading.Thread(target=self._gen_thumbs_cache, daemon=True).start()
+        self._recalc_duration()
+        self.auto_save_cache()
+        if self.edit_mode:
+            self.switch_inspector("video")
+            self.sync_player_to_time(start_t)
+        self.status_lbl.setText("🎞️ 视频素材已加入时间线。")
+        return True
+
     def load_audio(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "选择音频", "", "Audio Files (*.mp3 *.wav)")
+        file_path, _ = QFileDialog.getOpenFileName(self, "选择音频", "", "Audio Files (*.mp3 *.wav *.m4a *.aac *.flac *.ogg)")
         if file_path:
-            file_path = self.cloud_import_media_if_needed(file_path)
-            self.state["audio_path"] = file_path; self.btn_a.setText("✅ " + os.path.basename(file_path)[:15]); self.audio_player.setSource(QUrl.fromLocalFile(file_path))
-            a_dur = get_exact_duration(file_path)
-            if a_dur > 0: self.state["a_trim"] = [0.0, a_dur]
-            self._recalc_duration(); self.generate_waveform(file_path, "a_wave_pixmap"); self.update_timeline_size(); self.auto_save_cache()
+            self.set_audio_path_from_file(file_path)
+        return
+
+    def set_music_path_from_file(self, file_path):
+        if not file_path or not os.path.exists(file_path):
+            return False
+        file_path = self.cloud_import_media_if_needed(file_path)
+        self.state["music_path"] = file_path
+        self.state.setdefault("music_volume", 35)
+        if hasattr(self, "btn_music"):
+            self.btn_music.setText("✅ " + os.path.basename(file_path)[:15])
+        self.auto_save_cache()
+        self._update_workspace_status()
+        self.status_lbl.setText("🎼 配乐已加入；导出时会自动循环/裁切匹配工程时长。")
+        return True
+
+    def load_music(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "选择配乐", "", "Audio Files (*.mp3 *.wav *.m4a *.aac *.flac *.ogg)")
+        if file_path:
+            self.set_music_path_from_file(file_path)
+            self.match_music_to_audio(show_message=False)
+        return
             
     def load_video(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "选择视频", "", "Video Files (*.mp4 *.mov *.webm)")
+        file_path, _ = QFileDialog.getOpenFileName(self, "选择视频", "", "Video Files (*.mp4 *.mov *.webm *.mkv *.avi)")
         if file_path:
-            file_path = self.cloud_import_media_if_needed(file_path)
-            dur = get_exact_duration(file_path)
-            if dur <= 0: dur = 5.0
-            clips = self.state.get("video_clips", [])
-            start_t = clips[-1]["end"] if clips else 0.0
-            clips.append({"path": file_path, "start": start_t, "end": start_t + dur, "dur": dur})
-            self.state["video_clips"] = clips; self.btn_v.setText("✅ 已导原素材")
-            if len(clips) == 1: 
-                self.player.setSource(QUrl.fromLocalFile(file_path))
-                self.player.setLoops(QMediaPlayer.Loops.Infinite) 
-                self.on_resolution_changed(self.res_combo.currentText())
-                self.generate_waveform(file_path, "v_wave_pixmap")
-                threading.Thread(target=self._gen_thumbs_cache, daemon=True).start()
-            self._recalc_duration(); self.auto_save_cache()
+            self.add_video_clip_from_path(file_path)
+        return
 
     def auto_fill_video(self):
         clips = self.state.get("video_clips", [])
@@ -2133,6 +5163,8 @@ class EditView(QWidget):
         QMessageBox.information(self, "铺满成功", f"🚀 已将视频转换为复合片段！\n内部自动循环并紧密匹配音频时长 ({a_dur:.1f}s)。")
             
     def remove_last_video_clip(self):
+        if not self._ensure_edit_mode("删除视频"):
+            return
         clips = self.state.get("video_clips", [])
         if clips:
             clips.pop(); self.state["video_clips"] = clips
@@ -2149,24 +5181,90 @@ class EditView(QWidget):
             self.update_timeline_size()
             self.auto_save_cache()
             self.status_lbl.setText("🗑️ 配音已清除")
+
+    def remove_music(self):
+        if self.state.get("music_path"):
+            self.state["music_path"] = ""
+            if hasattr(self, "btn_music"):
+                self.btn_music.setText("🎼 导入配乐 (可选)")
+            self.auto_save_cache()
+            self._update_workspace_status()
+            self.status_lbl.setText("配乐已清除")
+
+    def match_music_to_audio(self, show_message=True):
+        music_path = self.state.get("music_path", "")
+        if not music_path:
+            return QMessageBox.warning(self, "提示", "请先导入配乐。")
+        target_dur = float(self.state.get("duration", 0.0) or 0.0)
+        a_path = self.state.get("audio_path", "")
+        if a_path:
+            target_dur = max(target_dur, get_exact_duration(a_path) or 0.0)
+        if target_dur <= 0:
+            self._recalc_duration()
+            target_dur = float(self.state.get("duration", 0.0) or 0.0)
+        self.state["music_match_duration"] = max(1.0, target_dur)
+        self.state["music_loop"] = True
+        self.auto_save_cache()
+        self.status_lbl.setText(f"配乐已匹配到 {self.state['music_match_duration']:.1f}s，导出会自动循环/裁切。")
+        if show_message:
+            QMessageBox.information(self, "配乐匹配完成", f"配乐会在导出时自动循环或裁切到 {self.state['music_match_duration']:.1f} 秒。")
             
     def _recalc_duration(self):
         clips = self.state.get("video_clips", [])
-        dur1 = max([c["end"] for c in clips]) if clips else 0.0
-        dur2 = get_exact_duration(self.state.get("audio_path")) if self.state.get("audio_path") else 0
-        self.state["duration"] = max(dur1, dur2); self.update_timeline_size()
+        durations = [float(c.get("end", 0.0) or 0.0) for c in clips]
+
+        a_path = self.state.get("audio_path")
+        if a_path:
+            durations.append(get_exact_duration(a_path))
+            a_trim = self.state.get("a_trim") or []
+            if len(a_trim) >= 2:
+                try:
+                    durations.append(max(0.0, float(a_trim[1]) - float(a_trim[0])))
+                except Exception:
+                    pass
+
+        subs = self.state.get("subs_data", []) or []
+        durations.extend(float(s.get("end", 0.0) or 0.0) for s in subs)
+
+        content_dur = max(durations) if durations else 0.0
+        render_dur = content_dur + render_tail_padding_seconds() if content_dur > 0 else 1.0
+        self.state["duration"] = max(1.0, render_dur); self.update_timeline_size()
 
     @pyqtSlot(QVideoFrame)
     def on_video_frame(self, frame):
-        if frame.isValid() and not frame.toImage().isNull():
-            img = frame.toImage(); w, h = self.video_label.width(), self.video_label.height()
-            if w > 0 and h > 0:
-                scaled_pix = QPixmap.fromImage(img).scaled(int(w * self.state["v_scale"] / 100.0), int(h * self.state["v_scale"] / 100.0), Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
-                result_pix = QPixmap(w, h); result_pix.fill(Qt.GlobalColor.black); painter = QPainter(result_pix); painter.drawPixmap((w - scaled_pix.width()) // 2, (h - scaled_pix.height()) // 2, scaled_pix); painter.end(); self.video_label.setPixmap(result_pix)
+        if frame.isValid():
+            image = frame.toImage()
+            if image.isNull():
+                return
+            self.last_video_image = image
+            self.redraw_video_preview()
+
+    def redraw_video_preview(self):
+        if not self.last_video_image or self.last_video_image.isNull():
+            return
+        img = self.last_video_image
+        w, h = self.video_label.width(), self.video_label.height()
+        if w > 0 and h > 0:
+            scaled_pix = QPixmap.fromImage(img).scaled(int(w * self.state["v_scale"] / 100.0), int(h * self.state["v_scale"] / 100.0), Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
+            result_pix = QPixmap(w, h)
+            result_pix.fill(Qt.GlobalColor.black)
+            painter = QPainter(result_pix)
+            painter.drawPixmap((w - scaled_pix.width()) // 2, (h - scaled_pix.height()) // 2, scaled_pix)
+            painter.end()
+            if hasattr(self, "preview_workspace"):
+                self.video_label.setPixmap(result_pix)
+            else:
+                self.video_label.setPixmap(self._apply_preview_transform_to_pixmap(result_pix))
     
     def toggle_play(self):
         self.is_playing = not self.is_playing; self.btn_play.setText("⏸️ 暂停" if self.is_playing else "▶️ 播放")
         if self.is_playing: 
+            duration = max(0.001, float(self.state.get("duration", 0.0) or 0.0))
+            if self.current_play_time >= duration - 0.03:
+                self.current_play_time = 0.0
+            self._play_clock_ref = time.monotonic()
+            self._play_time_ref = self.current_play_time
+            self._sync_video_playback_to_time(self.current_play_time, force_seek=True)
             self.player.play(); self.audio_player.play() if self.state.get("audio_path") else None
             self.play_timer = QTimer(self); self.play_timer.timeout.connect(self.play_tick); self.play_timer.start(30)
         else: 
@@ -2175,24 +5273,119 @@ class EditView(QWidget):
             
     def _on_video_media_status_changed(self, status):
         if status == QMediaPlayer.MediaStatus.EndOfMedia and self.is_playing:
-            self.player.setPosition(0)
+            if self._playback_loop_enabled():
+                self.player.setPosition(0)
+                self.player.play()
+            else:
+                self._stop_playback_at_end()
+
+    def _on_audio_media_status_changed(self, status):
+        if status == QMediaPlayer.MediaStatus.EndOfMedia and self.is_playing:
+            if self._playback_loop_enabled():
+                self.sync_player_to_time(0.0)
+                self.player.play()
+                if self.state.get("audio_path"):
+                    self.audio_player.play()
+            else:
+                self._stop_playback_at_end()
+
+    def _playback_loop_enabled(self):
+        return not hasattr(self, "chk_loop_playback") or self.chk_loop_playback.isChecked()
+
+    def _stop_playback_at_end(self):
+        self.is_playing = False
+        self.current_play_time = max(0.0, float(self.state.get("duration", 0.0) or 0.0))
+        self.btn_play.setText("â–¶ï¸ æ’­æ”¾")
+        self.player.pause()
+        if self.state.get("audio_path"):
+            self.audio_player.pause()
+        if hasattr(self, "play_timer"):
+            self.play_timer.stop()
+        self._update_time_label()
+
+    def _video_clip_for_time(self, time_sec):
+        clips = self.state.get("video_clips", [])
+        if not clips:
+            return -1, None
+        for idx, clip in enumerate(clips):
+            start = float(clip.get("start", 0.0) or 0.0)
+            end = float(clip.get("end", start) or start)
+            if start <= time_sec <= end:
+                return idx, clip
+        if time_sec < float(clips[0].get("start", 0.0) or 0.0):
+            return 0, clips[0]
+        return len(clips) - 1, clips[-1]
+
+    def _video_local_time(self, clip, time_sec):
+        if not clip:
+            return 0.0
+        start = float(clip.get("start", 0.0) or 0.0)
+        source_in = float(clip.get("source_in", 0.0) or 0.0)
+        source_out = float(clip.get("source_out", clip.get("dur", 0.0)) or clip.get("dur", 0.0) or 0.0)
+        source_len = max(0.001, source_out - source_in)
+        offset = max(0.0, float(time_sec or 0.0) - start)
+        if offset > source_len and float(clip.get("end", start) or start) - start > source_len:
+            offset = offset % source_len
+        return max(0.0, min(source_out, source_in + offset))
+
+    def _sync_video_playback_to_time(self, time_sec, force_seek=False):
+        idx, clip = self._video_clip_for_time(float(time_sec or 0.0))
+        if not clip:
+            return
+        path = clip.get("path", "")
+        if not path:
+            return
+        current_path = self.player.source().toLocalFile()
+        source_changed = current_path != path
+        if source_changed:
+            self.player.setSource(QUrl.fromLocalFile(path))
+            self.player.setLoops(QMediaPlayer.Loops.Infinite)
+        local_time = self._video_local_time(clip, time_sec)
+        player_time = self.player.position() / 1000.0
+        if force_seek or source_changed or abs(player_time - local_time) > 0.28:
+            self.player.setPosition(int(local_time * 1000))
+        if self.is_playing and source_changed:
             self.player.play()
+        self._playback_v_idx = idx
 
     def play_tick(self):
         if self.timeline_widget.is_scrubbing: return 
-        real_time = self.audio_player.position() / 1000.0 if self.state.get("audio_path") else self.player.position() / 1000.0
-        self.current_play_time = real_time; self.lbl_time.setText(f"{self.current_play_time:.1f}s / {self.state['duration']:.1f}s")
-        self.timeline_widget.update_playhead(real_time); self.update_floating_subtitle()
+        if self.state.get("audio_path"):
+            real_time = self.audio_player.position() / 1000.0
+        else:
+            ref_clock = getattr(self, "_play_clock_ref", time.monotonic())
+            ref_time = getattr(self, "_play_time_ref", self.current_play_time)
+            real_time = ref_time + max(0.0, time.monotonic() - ref_clock)
+        duration = max(0.001, float(self.state.get("duration", 0.0) or 0.0))
+        if real_time >= duration - 0.02:
+            if self._playback_loop_enabled():
+                real_time = 0.0
+                self._play_clock_ref = time.monotonic()
+                self._play_time_ref = 0.0
+                if self.state.get("audio_path"):
+                    self.audio_player.setPosition(0)
+                    if self.is_playing:
+                        self.audio_player.play()
+            else:
+                self._stop_playback_at_end()
+                return
+        self.current_play_time = real_time
+        self._sync_video_playback_to_time(real_time, force_seek=False)
+        self._update_time_label()
+        self.timeline_widget.update_playhead(real_time); self.update_floating_subtitle(); self._update_workspace_status()
         
     def sync_player_to_time(self, time_sec): 
         self.current_play_time = time_sec
+        self._play_clock_ref = time.monotonic()
+        self._play_time_ref = float(time_sec or 0.0)
         clips = self.state.get("video_clips", [])
-        if clips and clips[0].get("dur", 0) > 0:
-            local_time = time_sec % max(0.1, clips[0]["dur"]); self.player.setPosition(int(local_time * 1000))
-        else: self.player.setPosition(int(time_sec * 1000))
+        if clips:
+            self._sync_video_playback_to_time(time_sec, force_seek=True)
+        else:
+            self.player.setPosition(int(time_sec * 1000))
         if self.state.get("audio_path"): self.audio_player.setPosition(int(time_sec * 1000))
-        self.lbl_time.setText(f"{self.current_play_time:.1f}s / {self.state['duration']:.1f}s")
-        self.timeline_widget.update_playhead(time_sec); self.update_floating_subtitle()
+        self._update_time_label()
+        self.timeline_widget.update_playhead(time_sec); self.update_floating_subtitle(); self._update_workspace_status()
 
     def update_floating_subtitle(self):
         active_subs = []
@@ -2205,11 +5398,20 @@ class EditView(QWidget):
                     "box_width": s.get("style", {}).get("box_width", 0), 
                     "track": s.get("track", 1), "isSelected": (i == self.current_selected_idx)
                 })
-        current_hash = hash(json.dumps(active_subs, sort_keys=True))
+        parent = self.parent()
+        project_data = getattr(parent, "project", None) if parent else None
+        if not isinstance(project_data, dict):
+            project_data = self.project_data if isinstance(self.project_data, dict) else {}
+        design_state = project_data.get("room_state", {}).get("design_room", {}) if isinstance(project_data, dict) else {}
+        design_html = render_design_html(design_state, self.current_play_time, self.proj_width, self.proj_height)
+        signature_html = render_signature_html(self.state.get("signature"), self.current_play_time, self.proj_width)
+        current_hash = hash(json.dumps({"subs": active_subs, "signature": signature_html, "design": design_html}, sort_keys=True))
         if current_hash != getattr(self, 'last_render_hash', None): 
             json_str = json.dumps(active_subs)
             safe_json = json_str.replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$')
-            self.browser.page().runJavaScript(f"if(typeof syncSubs === 'function') syncSubs(`{safe_json}`);")
+            safe_sig = signature_html.replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$')
+            safe_design = design_html.replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$')
+            self.browser.page().runJavaScript(f"if(typeof syncDesign === 'function') syncDesign(`{safe_design}`); if(typeof syncSubs === 'function') syncSubs(`{safe_json}`); if(typeof syncSignature === 'function') syncSignature(`{safe_sig}`);")
             self.last_render_hash = current_hash; self.active_subs_cache = set([sub["idx"] for sub in active_subs])
 
     def sanitize_subs_data(self, data):
@@ -2355,7 +5557,7 @@ class EditView(QWidget):
             for acc in accounts:
                 if acc.get("id") and acc.get("token"):
                     try:
-                        res = requests.post(f"https://api.cloudflare.com/client/v4/accounts/{acc['id']}/ai/run/@cf/openai/whisper", headers={"Authorization": f"Bearer {acc['token']}", "Content-Type": "application/octet-stream"}, data=data, timeout=60, verify=False) 
+                        res = requests.post(f"https://api.cloudflare.com/client/v4/accounts/{acc['id']}/ai/run/@cf/openai/whisper", headers={"Authorization": f"Bearer {acc['token']}", "Content-Type": "application/octet-stream"}, data=data, timeout=60)
                         if res.status_code == 200 and res.json().get("success"): res_json = res.json(); break 
                         else: last_err = f"HTTP {res.status_code}: {res.text[:100]}"
                     except Exception as net_e: last_err = str(net_e)
@@ -2426,7 +5628,9 @@ class EditView(QWidget):
             natural_short = "自然短句" in mode or "1-4" in mode
             fixed_count = 0
             if not natural_short and not smart_short:
-                if "双词" in mode or "2词" in mode:
+                if "短句快速" in mode or "1-3" in mode:
+                    fixed_count = 3
+                elif "双词" in mode or "2词" in mode:
                     fixed_count = 2
                 elif "三词" in mode or "3词" in mode:
                     fixed_count = 3
@@ -2686,8 +5890,8 @@ class EditView(QWidget):
             self.project_data = project_data
             if parent and hasattr(parent, "project"):
                 parent.project = project_data
-                if hasattr(parent, "project_label"):
-                    parent.project_label.setText(f"当前工程：{project_data.get('project_name', '未命名工程')}")
+                if hasattr(parent, "refresh_room_links"):
+                    parent.refresh_room_links()
         except Exception:
             pass
         finally:
@@ -2697,6 +5901,8 @@ class EditView(QWidget):
         room_state = {}
         if isinstance(self.project_data, dict):
             room_state = self.project_data.get("room_state", {}).get("edit_room", {})
+        self.ensure_design_default_is_blank()
+        self.sync_design_panel_controls()
         if room_state:
             try:
                 room_state = dict(room_state)
@@ -2707,6 +5913,8 @@ class EditView(QWidget):
                 room_state["default_style"] = merged_default_style
                 self.state.update(room_state)
                 self.default_style.update(merged_default_style)
+                self.state["signature"] = normalize_signature_config(self.state.get("signature"), self.default_style)
+                self.sync_signature_controls()
                 self.last_render_hash = None
                 self.active_subs_cache = set()
                 self.v_scale_spin.setValue(self.state.get("v_scale", 100))
@@ -2734,13 +5942,15 @@ class EditView(QWidget):
                     self.btn_v.setText("✅ 已导原素材")
                     self.player.setSource(QUrl.fromLocalFile(clips[0]["path"]))
                     self.player.setLoops(QMediaPlayer.Loops.Infinite)
-                    self.on_resolution_changed(self.state.get("resolution", "原画检测 (自动跟随)"))
+                    self.on_resolution_changed(self.state.get("resolution", get_output_resolution()))
                     self.generate_waveform(clips[0]["path"], "v_wave_pixmap")
                     threading.Thread(target=self._gen_thumbs_cache, daemon=True).start()
                 if self.state.get("audio_path") and os.path.exists(self.state.get("audio_path")):
                     self.btn_a.setText("✅ " + os.path.basename(self.state.get("audio_path"))[:15])
                     self.audio_player.setSource(QUrl.fromLocalFile(self.state.get("audio_path")))
                     self.generate_waveform(self.state.get("audio_path"), "a_wave_pixmap")
+                if self.state.get("music_path") and os.path.exists(self.state.get("music_path")) and hasattr(self, "btn_music"):
+                    self.btn_music.setText("✅ " + os.path.basename(self.state.get("music_path"))[:15])
                 self.render_ui_list()
                 self.switch_inspector("empty")
                 self.push_history() # 初始化历史栈
@@ -2758,7 +5968,7 @@ class EditView(QWidget):
             if isinstance(cached.get("default_style"), dict):
                 merged_default_style.update(cached.get("default_style", {}))
             cached["default_style"] = merged_default_style
-            self.state.update(cached); self.default_style.update(merged_default_style); self.last_render_hash = None; self.active_subs_cache = set(); self.v_scale_spin.setValue(self.state.get("v_scale", 100)); self.v_vol_spin.setValue(self.state.get("v_volume", 100)); self.a_vol_spin.setValue(self.state.get("a_volume", 100))
+            self.state.update(cached); self.default_style.update(merged_default_style); self.state["signature"] = normalize_signature_config(self.state.get("signature"), self.default_style); self.sync_signature_controls(); self.last_render_hash = None; self.active_subs_cache = set(); self.v_scale_spin.setValue(self.state.get("v_scale", 100)); self.v_vol_spin.setValue(self.state.get("v_volume", 100)); self.a_vol_spin.setValue(self.state.get("a_volume", 100))
             chunk_value = self.state.get("chunk_mode", "双行大段 (约10字，智能折行)")
             timing_value = self.state.get("timing_mode", "J Cut (字幕稍后收尾)")
             if "对齐声音" in chunk_value:
@@ -2778,9 +5988,11 @@ class EditView(QWidget):
             self.text_editor.blockSignals(False)
             clips = self.state.get("video_clips", [])
             if clips: 
-                self.btn_v.setText("✅ 已导原素材"); self.player.setSource(QUrl.fromLocalFile(clips[0]["path"])); self.player.setLoops(QMediaPlayer.Loops.Infinite); self.on_resolution_changed(self.state.get("resolution", "原画检测 (自动跟随)")); self.generate_waveform(clips[0]["path"], "v_wave_pixmap"); threading.Thread(target=self._gen_thumbs_cache, daemon=True).start()
+                self.btn_v.setText("✅ 已导原素材"); self.player.setSource(QUrl.fromLocalFile(clips[0]["path"])); self.player.setLoops(QMediaPlayer.Loops.Infinite); self.on_resolution_changed(self.state.get("resolution", get_output_resolution())); self.generate_waveform(clips[0]["path"], "v_wave_pixmap"); threading.Thread(target=self._gen_thumbs_cache, daemon=True).start()
             if self.state.get("audio_path") and os.path.exists(self.state.get("audio_path")): 
                 self.btn_a.setText("✅ " + os.path.basename(self.state.get("audio_path"))[:15]); self.audio_player.setSource(QUrl.fromLocalFile(self.state.get("audio_path"))); self.generate_waveform(self.state.get("audio_path"), "a_wave_pixmap")
+            if self.state.get("music_path") and os.path.exists(self.state.get("music_path")) and hasattr(self, "btn_music"):
+                self.btn_music.setText("✅ " + os.path.basename(self.state.get("music_path"))[:15])
             self.render_ui_list(); self.switch_inspector("empty"); 
             self.push_history() # 初始化历史栈
             QTimer.singleShot(500, self._sync_duration_after_cache)
@@ -2788,9 +6000,13 @@ class EditView(QWidget):
     
     def on_resolution_changed(self, text): 
         clips = self.state.get("video_clips", [])
-        self.proj_width, self.proj_height = get_video_dimensions(clips[0]["path"]) if "自动跟随" in text and clips else [1080, 1920] if "1080x1920" in text else [1920, 1080] if "1920x1080" in text else [1080, 1080]
+        media_path = clips[0]["path"] if clips else ""
+        self.proj_width, self.proj_height = resolution_to_size(text or get_output_resolution(), media_path, get_video_dimensions)
         self.aspect_container.set_ratio(self.proj_width, self.proj_height); self.state["resolution"] = text
         self.browser.page().runJavaScript(f"if(typeof setResolution === 'function') setResolution({self.proj_width}, {self.proj_height});")
+        self._sync_preview_overlay_transform()
+        self.redraw_video_preview()
+        self._update_workspace_status()
         self.auto_save_cache()
     
     def _gen_thumbs_cache(self):

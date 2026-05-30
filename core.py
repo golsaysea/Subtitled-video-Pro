@@ -115,7 +115,7 @@ def auto_sync_cloud_data(on_complete=None):
             if not sync_url or not cloud_secret: return
 
             headers = {"X-App-Auth": cloud_secret}
-            res = requests.get(sync_url, headers=headers, timeout=10, verify=False)
+            res = requests.get(sync_url, headers=headers, timeout=10)
             if res.status_code != 200: return
                 
             data = res.json()

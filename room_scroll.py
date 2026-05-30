@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
 from elevenlabs_web_tool import create_elevenlabs_tool
 from elevenlabs_assist_tool import create_elevenlabs_assist_tool
 from app_theme import apply_tinted_styles
-from project_io import update_room_state
+from room_design import DesignView
 
 
 SETTINGS_FILE = os.path.join(os.getcwd(), "settings.json")
@@ -775,7 +775,6 @@ class ScrollView(QWidget):
     def __init__(self, project_data=None, parent=None):
         super().__init__(parent)
         self.project_data = project_data or {}
-        self.state = {"pages": []}
         self.tool_buttons = []
         self.init_ui()
         self.load_from_project(self.project_data)
@@ -806,14 +805,14 @@ class ScrollView(QWidget):
         side_layout.addWidget(side_title)
 
         self.stack = QStackedWidget()
-        self.scroll_tool_page = self._build_scroll_tool()
+        self.design_tool_page = DesignView(self.project_data, self)
         self.elevenlabs_tool_page = create_elevenlabs_tool(self, ElevenLabsTool)
         self.elevenlabs_assist_tool_page = create_elevenlabs_assist_tool(self)
-        self.stack.addWidget(self.scroll_tool_page)
+        self.stack.addWidget(self.design_tool_page)
         self.stack.addWidget(self.elevenlabs_tool_page)
         self.stack.addWidget(self.elevenlabs_assist_tool_page)
 
-        self._add_tool_button(side_layout, "工具 01", "滚动字幕", 0)
+        self._add_tool_button(side_layout, "工具 01", "设计", 0)
         self._add_tool_button(side_layout, "工具 02", "ElevenLabs 语音", 1, ELEVEN_ICON)
         self._add_tool_button(side_layout, "工具 03", "网页授权语音", 2, ELEVEN_ASSIST_ICON)
         side_layout.addStretch()
@@ -827,7 +826,11 @@ class ScrollView(QWidget):
         self._theme_colors = colors
         self._theme_key = theme_key or ""
         apply_tinted_styles(self, colors)
-        for page in (getattr(self, "elevenlabs_tool_page", None), getattr(self, "elevenlabs_assist_tool_page", None)):
+        for page in (
+            getattr(self, "design_tool_page", None),
+            getattr(self, "elevenlabs_tool_page", None),
+            getattr(self, "elevenlabs_assist_tool_page", None),
+        ):
             if hasattr(page, "apply_theme"):
                 page.apply_theme(colors, self._theme_key)
 
@@ -851,44 +854,15 @@ class ScrollView(QWidget):
         for i, btn in enumerate(self.tool_buttons):
             btn.setChecked(i == index)
 
-    def _build_scroll_tool(self):
-        page = QFrame()
-        page.setStyleSheet("QFrame { background-color: #181825; border: 1px solid #313244; border-radius: 10px; }")
-        tool_layout = QVBoxLayout(page)
-        tool_layout.setContentsMargins(16, 16, 16, 16)
-        tool_layout.setSpacing(12)
-
-        tool_header = QHBoxLayout()
-        tool_name = QLabel("工具 01 · 滚动字幕")
-        tool_name.setStyleSheet("font-size: 18px; font-weight: bold; color: #f9e2af; border: none;")
-        tool_header.addWidget(tool_name)
-        tool_header.addStretch()
-        tool_layout.addLayout(tool_header)
-
-        self.editor = QTextEdit()
-        self.editor.setPlaceholderText("每一行当作一页滚动字幕。")
-        self.editor.setStyleSheet("background-color: #11111b; color: #cdd6f4; border: 1px solid #313244; border-radius: 8px; padding: 10px;")
-        self.btn_save = QPushButton("💾 保存到工程")
-        self.btn_save.setStyleSheet("background-color: #a6e3a1; color: #11111b; font-size: 15px; font-weight: bold; padding: 10px 16px; border-radius: 6px;")
-        self.btn_save.clicked.connect(self.manual_save)
-        tool_layout.addWidget(self.editor, stretch=1)
-        tool_layout.addWidget(self.btn_save)
-        return page
-
     def load_from_project(self, project_data):
         self.project_data = project_data or self.project_data or {}
-        pages = []
-        if isinstance(self.project_data, dict):
-            pages = self.project_data.get("room_state", {}).get("scroll_room", {}).get("pages", [])
-            if not pages:
-                pages = self.project_data.get("scroll_pages", [])
-        self.state["pages"] = list(pages or [])
-        self.editor.setPlainText("\n".join(self.state["pages"]))
+        if hasattr(self, "design_tool_page"):
+            self.design_tool_page.load_from_project(self.project_data)
 
     def export_state(self):
-        pages = [line.strip() for line in self.editor.toPlainText().splitlines() if line.strip()]
-        self.state = {"pages": pages}
-        return self.state
+        if hasattr(self, "design_tool_page"):
+            return self.design_tool_page.export_state()
+        return {}
 
     def parent_window(self):
         parent = self.parent()
@@ -896,9 +870,16 @@ class ScrollView(QWidget):
             parent = parent.parent()
         return parent
 
-    def manual_save(self):
+    def save_to_project(self, silent=False):
         parent = self.parent_window()
-        if parent and hasattr(parent, "project"):
-            parent.project = update_room_state(parent.project, "scroll_room", self.export_state())
-            self.project_data = parent.project
-        QMessageBox.information(self, "保存成功", "小工具内容已写入工程文件。")
+        if hasattr(self, "design_tool_page"):
+            project_data = self.design_tool_page.save_to_project(silent=silent)
+            self.project_data = project_data
+            if parent and hasattr(parent, "project"):
+                parent.project = project_data
+            return project_data
+        return self.project_data
+
+    def manual_save(self):
+        self.save_to_project(silent=True)
+        QMessageBox.information(self, "保存成功", "设计内容已写入工程文件。")

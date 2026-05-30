@@ -1,5 +1,15 @@
 import os
 
+DEFAULT_RENDER_TAIL_PAD_SECONDS = 0.75
+
+
+def render_tail_padding_seconds():
+    try:
+        value = float(str(os.environ.get("SUBTITLE_RENDER_TAIL_PAD", DEFAULT_RENDER_TAIL_PAD_SECONDS)).strip())
+    except Exception:
+        value = DEFAULT_RENDER_TAIL_PAD_SECONDS
+    return max(0.0, min(5.0, value))
+
 
 PER_WORD_ANIMS = {
     "pop",
@@ -16,6 +26,7 @@ CONTINUOUS_ANIMS = {
     "wipe_right",
     "camera_push",
     "depth_push",
+    "holy_breath",
 }
 
 INTRO_ANIMS = {"slam_in"}
@@ -87,14 +98,26 @@ def _needs_continuous_sampling(style):
         anim_type in CONTINUOUS_ANIMS
         or font_motion not in ("none", "", None)
         or bg_mode == "sweep"
+        or bg_mode == "cinematic_frame"
     )
 
 
-def build_subtitle_frame_schedule(subs_data, total_duration):
+def build_subtitle_frame_schedule(subs_data, total_duration, extra_styles=None, extra_times=None):
     total_duration = max(0.001, float(total_duration or 0.0))
     event_fps = subtitle_event_fps()
     continuous_fps = subtitle_continuous_fps()
     times = {0.0, round(total_duration, 3)}
+
+    for value in extra_times or []:
+        try:
+            _add_time(times, float(value), total_duration)
+        except Exception:
+            continue
+
+    for style in extra_styles or []:
+        if isinstance(style, dict) and _needs_continuous_sampling(style):
+            _add_range_samples(times, 0.0, total_duration, continuous_fps, total_duration)
+            break
 
     for sub in subs_data or []:
         start = _bounded_time(sub.get("start", 0.0), 0.0, total_duration)

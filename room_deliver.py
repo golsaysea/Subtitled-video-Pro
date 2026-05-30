@@ -8,21 +8,24 @@ import re
 import threading
 import subprocess
 import shutil
+import copy
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QFrame, QProgressBar, QTextEdit, QFileDialog, QMessageBox, QDoubleSpinBox,
-    QDialog, QTreeWidget, QTreeWidgetItem, QScrollArea, QGridLayout, QCheckBox, QSplitter
+    QDialog, QTreeWidget, QTreeWidgetItem, QScrollArea, QGridLayout, QCheckBox, QSplitter,
+    QTabBar, QInputDialog
 )
 from PyQt6.QtCore import QProcess, QTimer, Qt
 from PyQt6.QtGui import QPixmap, QCursor
 from core import get_ffmpeg_cmd
 from app_theme import apply_tinted_styles
+from app_config import get_output_resolution, resolution_to_size
 from render_config import build_video_encoder_args, get_render_profile
-from render_timing import build_subtitle_frame_schedule, subtitle_supersample
+from render_timing import build_subtitle_frame_schedule, render_tail_padding_seconds, subtitle_supersample
 from playwright.sync_api import sync_playwright
 
 from font_assets import font_face_css
-from ui_components import get_exact_duration, get_video_dimensions, get_video_stream_duration, render_subtitle_html
+from ui_components import design_frame_times, get_exact_duration, get_video_dimensions, get_video_stream_duration, render_design_html, render_signature_html, render_subtitle_html
 from project_io import load_project, get_project_folder_paths, get_reels_in_folder
 from workspace_config import WORKSPACE_MODE_CLOUD, get_active_workspace, get_workspace_config
 from project_audit import audit_project, format_project_audit_report
@@ -30,6 +33,13 @@ from font_registry import STATUS_NONCOMMERCIAL
 
 CACHE_FILE = os.path.join(tempfile.gettempdir(), "sh_v8_project_cache.json")
 SUBTITLE_SUPERSAMPLE = subtitle_supersample()
+EXPORT_QUEUE_BACKUPS_FILE = os.path.join(os.getcwd(), "export_queue_backups.json")
+
+
+def safe_export_queue_name(value, fallback="queue"):
+    text = re.sub(r'[\\/:*?"<>|]+', "_", str(value or "").strip())
+    text = re.sub(r"\s+", "_", text).strip("._ ")
+    return text or fallback
 
 
 def get_browser_path():
@@ -329,9 +339,19 @@ class DeliverView(QWidget):
         self.out_file_path = ""
         self.batch_project_paths = []
         self.batch_output_dir = ""
+        self.export_queues = []
+        self.current_export_queue_index = 0
+        self._switching_export_queue = False
+        self.all_queue_rendering = False
+        self.all_queue_index = 0
+        self.all_queue_plan = []
         self.batch_rendering = False
         self.batch_render_index = 0
         self.current_batch_project_path = ""
+        self.active_render_project_data = None
+        self.active_render_project_state = None
+        self.active_render_design_state = None
+        self.active_render_duration = None
         self.init_ui()
 
     def init_ui(self):
@@ -341,7 +361,7 @@ class DeliverView(QWidget):
 
         left_panel = QFrame()
         left_panel.setStyleSheet("background-color: #181825; border-radius: 10px;")
-        left_panel.setFixedWidth(380)
+        left_panel.setFixedWidth(430)
         left_layout = QVBoxLayout(left_panel)
         left_layout.addWidget(QLabel("📦 渲染交付设置 (Deliver)", styleSheet="font-size: 18px; font-weight: bold; color: #cdd6f4;"))
         left_layout.addSpacing(20)
@@ -364,7 +384,34 @@ class DeliverView(QWidget):
         batch_layout = QVBoxLayout(batch_frame)
         batch_layout.setContentsMargins(12, 12, 12, 12)
         batch_layout.setSpacing(8)
-        batch_layout.addWidget(QLabel("批量渲染工程", styleSheet="font-size: 15px; font-weight: bold; color: #f9e2af; border: none;"))
+        batch_layout.addWidget(QLabel("导出队列", styleSheet="font-size: 15px; font-weight: bold; color: #f9e2af; border: none;"))
+        self.export_queue_tabs = QTabBar()
+        self.export_queue_tabs.setMovable(False)
+        self.export_queue_tabs.setExpanding(False)
+        self.export_queue_tabs.setStyleSheet("""
+            QTabBar::tab { background: #181825; color: #a6adc8; padding: 7px 10px; margin-right: 4px; border-radius: 6px; font-weight: bold; min-width: 72px; }
+            QTabBar::tab:selected { background: #89b4fa; color: #11111b; }
+        """)
+        self.export_queue_tabs.currentChanged.connect(self.switch_export_queue)
+        batch_layout.addWidget(self.export_queue_tabs)
+        queue_manage_row = QHBoxLayout()
+        queue_manage_row.setSpacing(6)
+        self.btn_new_export_queue = QPushButton("新增队列")
+        self.btn_delete_export_queue = QPushButton("删除队列")
+        self.btn_save_export_queue = QPushButton("保存队列")
+        self.btn_load_export_queue = QPushButton("调用队列")
+        for btn in (self.btn_new_export_queue, self.btn_delete_export_queue, self.btn_save_export_queue, self.btn_load_export_queue):
+            btn.setStyleSheet("background-color: #313244; color: #cdd6f4; font-weight: bold; padding: 6px; border-radius: 5px;")
+            btn.setMinimumHeight(30)
+            queue_manage_row.addWidget(btn)
+        self.btn_new_export_queue.clicked.connect(self.add_export_queue)
+        self.btn_delete_export_queue.clicked.connect(self.delete_current_export_queue)
+        self.btn_save_export_queue.clicked.connect(self.save_current_export_queue_backup)
+        self.btn_load_export_queue.clicked.connect(self.load_export_queue_backup)
+        batch_layout.addLayout(queue_manage_row)
+        self.lbl_export_queue_total = QLabel("总开关: 0 个队列 / 0 个工程")
+        self.lbl_export_queue_total.setStyleSheet("color: #a6e3a1; border: none; font-weight: bold;")
+        batch_layout.addWidget(self.lbl_export_queue_total)
         self.lbl_batch_projects = QLabel("未选择工程")
         self.lbl_batch_projects.setWordWrap(True)
         self.lbl_batch_projects.setStyleSheet("color: #a6adc8; border: none;")
@@ -373,18 +420,44 @@ class DeliverView(QWidget):
         self.lbl_batch_output.setStyleSheet("color: #a6adc8; border: none;")
         self.btn_select_batch_projects = QPushButton("从工程大厅选择")
         self.btn_select_batch_projects.setStyleSheet("background-color: #313244; color: #cdd6f4; font-weight: bold; padding: 7px; border-radius: 5px;")
+        self.btn_select_batch_projects.setMinimumHeight(32)
         self.btn_select_batch_projects.clicked.connect(self.select_batch_projects)
+        self.btn_add_batch_files = QPushButton("添加工程文件")
+        self.btn_add_batch_files.setStyleSheet("background-color: #313244; color: #cdd6f4; font-weight: bold; padding: 7px; border-radius: 5px;")
+        self.btn_add_batch_files.setMinimumHeight(32)
+        self.btn_add_batch_files.clicked.connect(self.select_batch_project_files)
+        self.btn_add_batch_folder = QPushButton("添加文件夹工程")
+        self.btn_add_batch_folder.setStyleSheet("background-color: #313244; color: #cdd6f4; font-weight: bold; padding: 7px; border-radius: 5px;")
+        self.btn_add_batch_folder.setMinimumHeight(32)
+        self.btn_add_batch_folder.clicked.connect(self.select_batch_project_folder)
+        self.btn_clear_batch_queue = QPushButton("清空队列")
+        self.btn_clear_batch_queue.setStyleSheet("background-color: #45475a; color: #cdd6f4; font-weight: bold; padding: 7px; border-radius: 5px;")
+        self.btn_clear_batch_queue.setMinimumHeight(32)
+        self.btn_clear_batch_queue.clicked.connect(self.clear_batch_queue)
         self.btn_select_batch_output = QPushButton("选择批量成品目录")
         self.btn_select_batch_output.setStyleSheet("background-color: #313244; color: #cdd6f4; font-weight: bold; padding: 7px; border-radius: 5px;")
+        self.btn_select_batch_output.setMinimumHeight(32)
         self.btn_select_batch_output.clicked.connect(self.select_batch_output_dir)
-        self.btn_batch_render = QPushButton("开始批量导出")
-        self.btn_batch_render.setStyleSheet("background-color: #f9e2af; color: #11111b; font-weight: bold; padding: 9px; border-radius: 5px;")
+        self.btn_batch_render = QPushButton("当前队列导出")
+        self.btn_batch_render.setMinimumHeight(36)
+        self.btn_batch_render.setStyleSheet("background-color: #f9e2af; color: #11111b; font-weight: bold; padding: 8px; border-radius: 5px;")
         self.btn_batch_render.clicked.connect(self.start_batch_render)
+        self.btn_all_queue_render = QPushButton("🚀 全部队列导出")
+        self.btn_all_queue_render.setMinimumHeight(38)
+        self.btn_all_queue_render.setStyleSheet("background-color: #a6e3a1; color: #11111b; font-weight: bold; padding: 8px; border-radius: 6px;")
+        self.btn_all_queue_render.clicked.connect(self.start_all_export_queues)
         batch_layout.addWidget(self.lbl_batch_projects)
         batch_layout.addWidget(self.lbl_batch_output)
         batch_layout.addWidget(self.btn_select_batch_projects)
+        queue_btn_row = QHBoxLayout()
+        queue_btn_row.setSpacing(6)
+        queue_btn_row.addWidget(self.btn_add_batch_files)
+        queue_btn_row.addWidget(self.btn_add_batch_folder)
+        batch_layout.addLayout(queue_btn_row)
+        batch_layout.addWidget(self.btn_clear_batch_queue)
         batch_layout.addWidget(self.btn_select_batch_output)
         batch_layout.addWidget(self.btn_batch_render)
+        batch_layout.addWidget(self.btn_all_queue_render)
         left_layout.addWidget(batch_frame)
         left_layout.addStretch()
 
@@ -408,26 +481,97 @@ class DeliverView(QWidget):
         self.progress_bar.setValue(0)
         right_layout.addWidget(self.progress_bar)
         main_layout.addWidget(right_panel, stretch=1)
+        self._init_default_export_queues()
 
     def apply_theme(self, colors, theme_key=None):
         self._theme_colors = colors
         self._theme_key = theme_key or ""
         apply_tinted_styles(self, colors)
 
+    def _safe_float(self, value, default=0.0):
+        try:
+            return float(str(value).replace(",", "."))
+        except Exception:
+            return default
+
+    def _safe_render_duration(self, requested=None, state=None, design_state=None):
+        state = state if isinstance(state, dict) else (self.project_state if isinstance(self.project_state, dict) else {})
+        durations = []
+
+        for clip in state.get("video_clips", []) or []:
+            durations.append(self._safe_float(clip.get("end"), 0.0))
+
+        for sub in state.get("subs_data", []) or []:
+            durations.append(self._safe_float(sub.get("end"), 0.0))
+
+        design_state = design_state if isinstance(design_state, dict) else (getattr(self, "design_state", {}) or {})
+        design_pages = design_state.get("pages", []) if isinstance(design_state, dict) else []
+        if isinstance(design_pages, list) and design_pages:
+            durations.append(sum(max(0.0, self._safe_float(page.get("duration"), 0.0)) for page in design_pages if isinstance(page, dict)))
+
+        a_path = state.get("audio_path", "")
+        if a_path:
+            durations.append(get_exact_duration(a_path))
+            a_trim = state.get("a_trim") or []
+            if len(a_trim) >= 2:
+                durations.append(max(0.0, self._safe_float(a_trim[1], 0.0) - self._safe_float(a_trim[0], 0.0)))
+
+        content_dur = max(durations) if durations else 0.0
+        guarded_dur = content_dur + render_tail_padding_seconds() if content_dur > 0 else 1.0
+        if requested is not None:
+            guarded_dur = max(guarded_dur, self._safe_float(requested, 0.0))
+        return max(1.0, guarded_dur)
+
     def _summarize_project_state(self):
         clips = self.project_state.get("video_clips", [])
         a_path = self.project_state.get("audio_path", "")
+        music_path = self.project_state.get("music_path", "")
         dur = self.project_state.get("duration", 10.0)
         sub_count = len(self.project_state.get("subs_data", []))
         v_info = f"{len(clips)} 个弹性复合片段" if clips else "未导入"
         a_name = os.path.basename(a_path) if a_path else "未导入"
-        info = f"🎥 视频源: {v_info}\n🎵 音频源: {a_name}\n📝 独立字幕片段: {sub_count} 个"
+        music_name = os.path.basename(music_path) if music_path else "未导入"
+        info = f"🎥 视频源: {v_info}\n🎵 音频源: {a_name}\n🎼 配乐: {music_name}\n📝 独立字幕片段: {sub_count} 个"
         self.lbl_info.setText(info)
         try:
             dur_value = float(str(dur or 10.0).replace(",", "."))
         except Exception:
             dur_value = 10.0
-        self.spin_duration.setValue(max(1.0, dur_value))
+        self.spin_duration.setValue(self._safe_render_duration(dur_value))
+
+    def _freeze_render_job(self, project_data=None, project_state=None, design_state=None):
+        project_data = project_data if isinstance(project_data, dict) else self.project_data
+        project_state = project_state if isinstance(project_state, dict) else self.project_state
+        design_state = design_state if isinstance(design_state, dict) else getattr(self, "design_state", {})
+        self.active_render_project_data = copy.deepcopy(project_data or {})
+        self.active_render_project_state = copy.deepcopy(project_state or {})
+        self.active_render_design_state = copy.deepcopy(design_state or {})
+        self.active_render_duration = self._safe_render_duration(
+            float(self.spin_duration.value()),
+            self.active_render_project_state,
+            self.active_render_design_state,
+        )
+
+    def _clear_render_job(self):
+        self.active_render_project_data = None
+        self.active_render_project_state = None
+        self.active_render_design_state = None
+        self.active_render_duration = None
+
+    def _render_project_state(self):
+        if isinstance(self.active_render_project_state, dict):
+            return self.active_render_project_state
+        return self.project_state if isinstance(self.project_state, dict) else {}
+
+    def _render_design_state(self):
+        if isinstance(self.active_render_design_state, dict):
+            return self.active_render_design_state
+        return getattr(self, "design_state", {}) or {}
+
+    def _render_duration(self, fallback_state=None, fallback_design_state=None):
+        if self.active_render_duration is not None:
+            return float(self.active_render_duration)
+        return self._safe_render_duration(float(self.spin_duration.value()), fallback_state, fallback_design_state)
 
     def _project_state_score(self, state):
         if not isinstance(state, dict):
@@ -477,6 +621,7 @@ class DeliverView(QWidget):
             if candidates:
                 _, state, project = max(candidates, key=lambda item: item[0])
                 self.project_state = state
+                self.design_state = dict(project.get("room_state", {}).get("design_room", {})) if isinstance(project, dict) else {}
                 if isinstance(project, dict):
                     self.project_data = project
                     parent = self.parent()
@@ -484,9 +629,11 @@ class DeliverView(QWidget):
                         parent.project = project
             else:
                 self.project_state = {}
+                self.design_state = {}
             self._summarize_project_state()
         except Exception:
             self.project_state = {}
+            self.design_state = {}
             self.lbl_info.setText("❌ 工程数据读取失败")
 
     def log_safe(self, msg, color="#cdd6f4"):
@@ -498,6 +645,203 @@ class DeliverView(QWidget):
 
     def update_progress_safe(self, val):
         QTimer.singleShot(0, lambda: self.progress_bar.setValue(int(val)))
+
+    def _new_export_queue_state(self, name=None):
+        return {
+            "name": name or f"队列 {len(self.export_queues) + 1}",
+            "paths": [],
+            "output_dir": "",
+        }
+
+    def _init_default_export_queues(self):
+        if not self.export_queues:
+            self.export_queues = [self._new_export_queue_state("队列 1")]
+            self.current_export_queue_index = 0
+        self._refresh_export_queue_tabs()
+        self._apply_export_queue_state(self.export_queues[self.current_export_queue_index])
+
+    def _capture_current_export_queue_state(self):
+        if self._switching_export_queue or not self.export_queues:
+            return
+        idx = max(0, min(self.current_export_queue_index, len(self.export_queues) - 1))
+        state = self.export_queues[idx]
+        state["paths"] = list(self.batch_project_paths)
+        state["output_dir"] = self.batch_output_dir
+
+    def _apply_export_queue_state(self, state):
+        self._switching_export_queue = True
+        self.batch_project_paths = list(state.get("paths", []))
+        self.batch_output_dir = state.get("output_dir", "")
+        self.lbl_batch_output.setText(f"输出目录: {self.batch_output_dir}" if self.batch_output_dir else "输出目录: 未选择")
+        self._refresh_batch_queue_label()
+        self._switching_export_queue = False
+        self._refresh_export_queue_total()
+
+    def _refresh_export_queue_tabs(self):
+        if not hasattr(self, "export_queue_tabs"):
+            return
+        self.export_queue_tabs.blockSignals(True)
+        while self.export_queue_tabs.count():
+            self.export_queue_tabs.removeTab(0)
+        for idx, state in enumerate(self.export_queues):
+            total = len(state.get("paths", []))
+            self.export_queue_tabs.addTab(f"{state.get('name', f'队列 {idx + 1}')} ({total})")
+        if self.export_queues:
+            self.export_queue_tabs.setCurrentIndex(max(0, min(self.current_export_queue_index, len(self.export_queues) - 1)))
+        self.export_queue_tabs.blockSignals(False)
+        self._refresh_export_queue_total()
+
+    def _refresh_export_queue_total(self):
+        if not hasattr(self, "lbl_export_queue_total"):
+            return
+        self._capture_current_export_queue_state()
+        active_queues = [q for q in self.export_queues if q.get("paths")]
+        total_projects = sum(len(q.get("paths", [])) for q in active_queues)
+        self.lbl_export_queue_total.setText(f"总开关: {len(active_queues)} 个队列 / {total_projects} 个工程")
+
+    def switch_export_queue(self, index):
+        if self._switching_export_queue or index < 0 or index >= len(self.export_queues):
+            return
+        if self.batch_rendering:
+            return
+        self._capture_current_export_queue_state()
+        self.current_export_queue_index = index
+        self._apply_export_queue_state(self.export_queues[index])
+
+    def add_export_queue(self):
+        if self.batch_rendering:
+            return
+        self._capture_current_export_queue_state()
+        self.export_queues.append(self._new_export_queue_state())
+        self.current_export_queue_index = len(self.export_queues) - 1
+        self._refresh_export_queue_tabs()
+        self._apply_export_queue_state(self.export_queues[self.current_export_queue_index])
+
+    def delete_current_export_queue(self):
+        if self.batch_rendering:
+            return QMessageBox.warning(self, "正在导出", "导出进行中不能删除队列。")
+        if len(self.export_queues) <= 1:
+            self.export_queues[0] = self._new_export_queue_state("队列 1")
+            self.current_export_queue_index = 0
+        else:
+            self.export_queues.pop(self.current_export_queue_index)
+            self.current_export_queue_index = max(0, min(self.current_export_queue_index, len(self.export_queues) - 1))
+        self._refresh_export_queue_tabs()
+        self._apply_export_queue_state(self.export_queues[self.current_export_queue_index])
+
+    def _load_export_queue_backups(self):
+        if not os.path.exists(EXPORT_QUEUE_BACKUPS_FILE):
+            return []
+        try:
+            with open(EXPORT_QUEUE_BACKUPS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data if isinstance(data, list) else []
+        except Exception:
+            return []
+
+    def _save_export_queue_backups(self, backups):
+        with open(EXPORT_QUEUE_BACKUPS_FILE, "w", encoding="utf-8") as f:
+            json.dump(backups, f, ensure_ascii=False, indent=2)
+
+    def save_current_export_queue_backup(self):
+        self._capture_current_export_queue_state()
+        if not self.export_queues:
+            return
+        name, ok = QInputDialog.getText(self, "保存导出队列", "备份名称:", text=self.export_queues[self.current_export_queue_index].get("name", "导出队列"))
+        if not ok or not name.strip():
+            return
+        backups = self._load_export_queue_backups()
+        state = copy.deepcopy(self.export_queues[self.current_export_queue_index])
+        state["backup_name"] = name.strip()
+        backups = [b for b in backups if b.get("backup_name") != name.strip()]
+        backups.append(state)
+        self._save_export_queue_backups(backups)
+        self.log_safe(f"已保存导出队列备份：{name.strip()}", "#a6e3a1")
+
+    def load_export_queue_backup(self):
+        backups = self._load_export_queue_backups()
+        if not backups:
+            return QMessageBox.information(self, "没有备份", "还没有保存过导出队列。")
+        labels = [b.get("backup_name") or b.get("name") or f"备份 {i + 1}" for i, b in enumerate(backups)]
+        choice, ok = QInputDialog.getItem(self, "调用导出队列", "选择备份:", labels, 0, False)
+        if not ok:
+            return
+        self._capture_current_export_queue_state()
+        state = copy.deepcopy(backups[labels.index(choice)])
+        state["name"] = state.get("backup_name") or state.get("name") or f"队列 {len(self.export_queues) + 1}"
+        state["paths"] = self._normalize_batch_project_paths(state.get("paths", []))
+        state["output_dir"] = state.get("output_dir", "")
+        self.export_queues.append(state)
+        self.current_export_queue_index = len(self.export_queues) - 1
+        self._refresh_export_queue_tabs()
+        self._apply_export_queue_state(state)
+
+    def _runnable_export_queue_plan(self):
+        self._capture_current_export_queue_state()
+        plan = []
+        for idx, state in enumerate(self.export_queues):
+            paths = self._normalize_batch_project_paths(state.get("paths", []))
+            output_dir = state.get("output_dir", "")
+            if paths:
+                plan.append({"index": idx, "name": state.get("name", f"队列 {idx + 1}"), "paths": paths, "output_dir": output_dir})
+        return plan
+
+    def start_all_export_queues(self):
+        if self.batch_rendering:
+            return
+        plan = self._runnable_export_queue_plan()
+        if not plan:
+            return QMessageBox.warning(self, "队列为空", "请先在至少一个导出队列里添加工程。")
+        missing_output = [item["name"] for item in plan if not item.get("output_dir")]
+        if missing_output:
+            return QMessageBox.warning(self, "缺少输出目录", "以下队列还没有选择输出目录：\n" + "\n".join(missing_output[:8]))
+        self.all_queue_rendering = True
+        self.all_queue_index = 0
+        self.all_queue_plan = plan
+        self.log_console.clear()
+        self.progress_bar.setValue(0)
+        total_projects = sum(len(item["paths"]) for item in plan)
+        self.log_safe(f"总开关启动：{len(plan)} 个队列 / {total_projects} 个工程。", "#a6e3a1")
+        self._start_next_export_queue_from_plan()
+
+    def _start_next_export_queue_from_plan(self):
+        if self.all_queue_index >= len(self.all_queue_plan):
+            self.all_queue_rendering = False
+            self.all_queue_plan = []
+            self.set_batch_queue_controls_enabled(True)
+            self.btn_render.setEnabled(True)
+            self.btn_batch_render.setEnabled(True)
+            self.progress_bar.setValue(100)
+            self._refresh_export_queue_tabs()
+            self.log_safe("全部导出队列已完成。", "#a6e3a1")
+            QMessageBox.information(self, "全部队列完成", "所有导出队列已经处理完成。")
+            return
+        item = self.all_queue_plan[self.all_queue_index]
+        self.current_export_queue_index = item["index"]
+        self._refresh_export_queue_tabs()
+        self.batch_project_paths = list(item["paths"])
+        self.batch_output_dir = item["output_dir"]
+        self.lbl_batch_output.setText(f"输出目录: {self.batch_output_dir}")
+        self._refresh_batch_queue_label()
+        self.log_safe(f"开始队列 {self.all_queue_index + 1}/{len(self.all_queue_plan)}：{item['name']}（{len(item['paths'])} 个工程）", "#f9e2af")
+        self.start_batch_render(clear_log=False)
+
+    def set_batch_queue_controls_enabled(self, enabled):
+        for name in (
+            "btn_select_batch_projects",
+            "btn_add_batch_files",
+            "btn_add_batch_folder",
+            "btn_clear_batch_queue",
+            "btn_select_batch_output",
+            "btn_new_export_queue",
+            "btn_delete_export_queue",
+            "btn_save_export_queue",
+            "btn_load_export_queue",
+            "btn_all_queue_render",
+        ):
+            widget = getattr(self, name, None)
+            if widget is not None:
+                widget.setEnabled(bool(enabled))
 
     def current_workspace(self):
         parent = self.parent()
@@ -519,9 +863,9 @@ class DeliverView(QWidget):
             return
         cfg = get_workspace_config()
         source_label = "云端工程大厅" if cfg.get("mode") == WORKSPACE_MODE_CLOUD else "工程大厅"
-        self.set_batch_projects(dialog.selected_paths(), source_label=source_label)
+        self.set_batch_projects(dialog.selected_paths(), source_label=source_label, append=True)
 
-    def set_batch_projects(self, paths, source_label="", output_dir=""):
+    def _normalize_batch_project_paths(self, paths):
         valid_paths = []
         seen = set()
         for path in paths or []:
@@ -531,30 +875,118 @@ class DeliverView(QWidget):
             if key in seen:
                 continue
             seen.add(key)
+            valid_paths.append(os.path.abspath(path))
+        return valid_paths
+
+    def _refresh_batch_queue_label(self, source_label="", active_index=None):
+        total = len(self.batch_project_paths)
+        if total:
+            folders = len({os.path.normcase(os.path.dirname(path)) for path in self.batch_project_paths})
+            label = f"队列 {total} 个工程 · {folders} 个文件夹"
+            if active_index is not None and 0 <= active_index < total:
+                label += f" · 当前 {active_index + 1}/{total}"
+            if source_label:
+                label += f" · 新增: {source_label}"
+            self.lbl_batch_projects.setText(label)
+        else:
+            self.lbl_batch_projects.setText("队列为空")
+
+    def set_batch_projects(self, paths, source_label="", output_dir="", append=False):
+        incoming = self._normalize_batch_project_paths(paths)
+        valid_paths = list(self.batch_project_paths) if append else []
+        seen = {os.path.normcase(os.path.abspath(path)) for path in valid_paths}
+        added_count = 0
+        for path in incoming:
+            key = os.path.normcase(os.path.abspath(path))
+            if key in seen:
+                continue
+            seen.add(key)
             valid_paths.append(path)
+            added_count += 1
 
         self.batch_project_paths = valid_paths
         if valid_paths:
-            label = f"已选择 {len(valid_paths)} 个工程"
-            if source_label:
-                label += f" · {source_label}"
-            self.lbl_batch_projects.setText(label)
+            self._refresh_batch_queue_label(source_label)
             if output_dir:
                 self.batch_output_dir = output_dir
                 self.lbl_batch_output.setText(f"输出目录: {output_dir}")
-            self.log_safe(f"已接收 {len(valid_paths)} 个批量导出工程。", "#89b4fa")
+            if append:
+                self.log_safe(f"导出队列新增 {added_count} 个工程，当前共 {len(valid_paths)} 个。", "#89b4fa")
+            else:
+                self.log_safe(f"已设置 {len(valid_paths)} 个批量导出工程。", "#89b4fa")
         else:
-            self.lbl_batch_projects.setText("未选择工程")
+            self._refresh_batch_queue_label()
+        self._capture_current_export_queue_state()
+        self._refresh_export_queue_tabs()
+
+    def set_export_queues_from_batch_groups(self, groups, source_label="", default_output_dir="", append=False):
+        normalized = []
+        source_groups = [group for group in (groups or []) if isinstance(group, dict)]
+        multi_group = len(source_groups) > 1
+        for idx, group in enumerate(source_groups, start=1):
+            paths = self._normalize_batch_project_paths(group.get("paths", []))
+            if not paths:
+                continue
+            name = str(group.get("name") or f"队列 {idx}")
+            output_dir = str(group.get("output_dir") or "").strip()
+            if not output_dir and default_output_dir:
+                output_dir = os.path.join(default_output_dir, safe_export_queue_name(name)) if multi_group else default_output_dir
+            normalized.append({
+                "name": name,
+                "paths": paths,
+                "output_dir": output_dir,
+            })
+        if not normalized:
+            return self.set_batch_projects([], source_label=source_label, output_dir=default_output_dir, append=append)
+        self._capture_current_export_queue_state()
+        if append:
+            self.export_queues.extend(normalized)
+            self.current_export_queue_index = len(self.export_queues) - len(normalized)
+        else:
+            self.export_queues = normalized
+            self.current_export_queue_index = 0
+        self._refresh_export_queue_tabs()
+        self._apply_export_queue_state(self.export_queues[self.current_export_queue_index])
+        total = sum(len(item.get("paths", [])) for item in normalized)
+        label = source_label or "批量建工程"
+        self.log_safe(f"已同步 {len(normalized)} 个导出队列 / {total} 个工程（来源：{label}）。", "#89b4fa")
+
+    def select_batch_project_files(self):
+        paths, _ = QFileDialog.getOpenFileNames(self, "添加工程文件到导出队列", "", "Subtitle Composer Projects (*.scomp)")
+        if paths:
+            self.set_batch_projects(paths, source_label="工程文件", append=True)
+
+    def select_batch_project_folder(self):
+        folder = QFileDialog.getExistingDirectory(self, "添加文件夹里的工程到导出队列")
+        if not folder:
+            return
+        paths = get_reels_in_folder(folder, recursive=True)
+        if not paths:
+            return QMessageBox.information(self, "没有工程", "这个文件夹里没有找到 .scomp 工程文件。")
+        paths = sorted(paths, key=lambda path: os.path.basename(path).lower())
+        self.set_batch_projects(paths, source_label=os.path.basename(folder) or folder, append=True)
+
+    def clear_batch_queue(self):
+        if self.batch_rendering:
+            return QMessageBox.warning(self, "正在导出", "导出进行中不能清空队列。")
+        self.batch_project_paths = []
+        self.batch_render_index = 0
+        self._refresh_batch_queue_label()
+        self._capture_current_export_queue_state()
+        self._refresh_export_queue_tabs()
+        self.log_safe("导出队列已清空。", "#a6adc8")
 
     def select_batch_output_dir(self):
         d = QFileDialog.getExistingDirectory(self, "选择批量成品输出目录")
         if d:
             self.batch_output_dir = d
             self.lbl_batch_output.setText(f"输出目录: {d}")
+            self._capture_current_export_queue_state()
 
-    def start_batch_render(self):
+    def start_batch_render(self, clear_log=True):
         if self.batch_rendering:
             return
+        self._capture_current_export_queue_state()
         if not self.batch_project_paths:
             return QMessageBox.warning(self, "提示", "请先从工程大厅选择要批量导出的工程。")
         if not self.batch_output_dir:
@@ -564,8 +996,11 @@ class DeliverView(QWidget):
         self.batch_render_index = 0
         self.btn_render.setEnabled(False)
         self.btn_batch_render.setEnabled(False)
-        self.log_console.clear()
+        self.set_batch_queue_controls_enabled(False)
+        if clear_log:
+            self.log_console.clear()
         self.progress_bar.setValue(0)
+        self._refresh_batch_queue_label(active_index=0)
         self.log_safe(f"批量渲染启动，共 {len(self.batch_project_paths)} 个工程。", "#a6e3a1")
         self._start_next_batch_render()
 
@@ -573,18 +1008,29 @@ class DeliverView(QWidget):
         if self.batch_render_index >= len(self.batch_project_paths):
             self.batch_rendering = False
             self.current_batch_project_path = ""
+            self._clear_render_job()
+            if self.all_queue_rendering:
+                queue_name = self.all_queue_plan[self.all_queue_index]["name"] if self.all_queue_index < len(self.all_queue_plan) else "队列"
+                self.log_safe(f"队列完成：{queue_name}", "#a6e3a1")
+                self.all_queue_index += 1
+                QTimer.singleShot(0, self._start_next_export_queue_from_plan)
+                return
             self.btn_render.setEnabled(True)
             self.btn_batch_render.setEnabled(True)
+            self.set_batch_queue_controls_enabled(True)
             self.progress_bar.setValue(100)
+            self._refresh_batch_queue_label()
             self.log_safe("批量渲染全部完成。", "#a6e3a1")
             QMessageBox.information(self, "批量渲染完成", f"已处理 {len(self.batch_project_paths)} 个工程。\n输出目录:\n{self.batch_output_dir}")
             return
 
         project_path = self.batch_project_paths[self.batch_render_index]
+        self._refresh_batch_queue_label(active_index=self.batch_render_index)
         try:
             project = load_project(project_path)
             self.project_data = project
             self.project_state = dict(project.get("room_state", {}).get("edit_room", {}))
+            self.design_state = dict(project.get("room_state", {}).get("design_room", {}))
             self.log_safe(
                 f"📦 读取工程: 字幕 {len(self.project_state.get('subs_data', []) or [])} / 视频 {len(self.project_state.get('video_clips', []) or [])}",
                 "#89b4fa",
@@ -603,12 +1049,16 @@ class DeliverView(QWidget):
             self.current_batch_project_path = project_path
             self._summarize_project_state()
             self.out_file_path = self._unique_batch_output_path(project)
+            self._freeze_render_job(project, self.project_state, self.design_state)
             self.progress_bar.setValue(0)
             self.log_safe(f"[{self.batch_render_index + 1}/{len(self.batch_project_paths)}] 开始渲染: {project.get('project_name', os.path.basename(project_path))}", "#f9e2af")
             self.log_safe(f"输出: {self.out_file_path}", "#89b4fa")
             threading.Thread(target=self.generate_html_frames, daemon=True).start()
         except Exception as e:
             self.log_safe(f"跳过工程: {os.path.basename(project_path)} | {e}", "#f38ba8")
+            self._clear_render_job()
+            self._clear_render_job()
+            self._clear_render_job()
             self.batch_render_index += 1
             QTimer.singleShot(0, self._start_next_batch_render)
 
@@ -629,9 +1079,11 @@ class DeliverView(QWidget):
                     shutil.rmtree(self.temp_dir)
             except Exception:
                 pass
+            self._clear_render_job()
             self.batch_render_index += 1
             QTimer.singleShot(0, self._start_next_batch_render)
         else:
+            self._clear_render_job()
             self.btn_render.setEnabled(True)
 
     def start_render(self):
@@ -685,29 +1137,26 @@ class DeliverView(QWidget):
         if not file_path:
             return
         self.out_file_path = file_path
+        self._freeze_render_job(self.project_data, self.project_state, self.design_state)
         self.btn_render.setEnabled(False)
         self.log_safe("🚀 [阶段 1/2] 启动全局时间推演引擎 (多轨道同频渲染)...", "#f9e2af")
         threading.Thread(target=self.generate_html_frames, daemon=True).start()
 
     def generate_html_frames(self):
         try:
+            project_state = copy.deepcopy(self._render_project_state())
+            design_state = copy.deepcopy(self._render_design_state())
             self.temp_dir = tempfile.mkdtemp(prefix="subtitle_render_")
             self.concat_path = os.path.join(self.temp_dir, "subs_concat.txt").replace("\\", "/")
             blank_path = os.path.join(self.temp_dir, "blank.png").replace("\\", "/")
-            subs_data = self.project_state.get("subs_data", [])
-            total_dur = float(self.spin_duration.value())
+            subs_data = project_state.get("subs_data", [])
+            signature = project_state.get("signature", {})
+            total_dur = self._render_duration(project_state, design_state)
 
-            clips = self.project_state.get("video_clips", [])
-            proj_w, proj_h = 1080, 1920
-            res_text = self.project_state.get("resolution", "自动检测")
-            if "自动跟随" in res_text and clips:
-                proj_w, proj_h = get_video_dimensions(clips[0]["path"])
-            elif "1080x1920" in res_text:
-                proj_w, proj_h = 1080, 1920
-            elif "1920x1080" in res_text:
-                proj_w, proj_h = 1920, 1080
-            elif "1080x1080" in res_text:
-                proj_w, proj_h = 1080, 1080
+            clips = project_state.get("video_clips", [])
+            res_text = project_state.get("resolution") or get_output_resolution()
+            media_path = clips[0]["path"] if clips else ""
+            proj_w, proj_h = resolution_to_size(res_text, media_path, get_video_dimensions)
 
             with sync_playwright() as p:
                 browser = launch_render_browser(p)
@@ -721,7 +1170,15 @@ class DeliverView(QWidget):
                 with open(self.concat_path, "w", encoding="utf-8") as f_concat:
                     frame_idx = 0
                     last_concat_file = blank_path
-                    frame_schedule = build_subtitle_frame_schedule(subs_data, total_dur)
+                    extra_styles = []
+                    if isinstance(signature, dict) and signature.get("enabled") and str(signature.get("text", "")).strip():
+                        extra_styles.append(signature.get("style", {}))
+                    frame_schedule = build_subtitle_frame_schedule(
+                        subs_data,
+                        total_dur,
+                        extra_styles=extra_styles,
+                        extra_times=design_frame_times(design_state),
+                    )
                     self.log_safe(
                         f"⚡ 字幕渲染采样: {len(frame_schedule)} 段，超采样 x{SUBTITLE_SUPERSAMPLE}",
                         "#89b4fa",
@@ -739,12 +1196,14 @@ class DeliverView(QWidget):
                             s for s in subs_data
                             if float(s.get('start', 0)) <= current_time < float(s.get('end', 1))
                         ]
-                        if not active_subs:
+                        design_html = render_design_html(design_state, current_time, proj_w, proj_h)
+                        signature_html = render_signature_html(signature, current_time, proj_w)
+                        if not active_subs and not signature_html and not design_html:
                             write_subtitle_frame(blank_path, frame_duration)
                             self.update_progress_safe(int(((current_time + frame_duration) / total_dur) * 50))
                             continue
 
-                        html_subs = ""
+                        html_subs = design_html + signature_html
                         for s in active_subs:
                             px = s.get("pos_x", 0.0)
                             py = s.get("pos_y", 25.0)
@@ -799,22 +1258,26 @@ class DeliverView(QWidget):
 
     def start_ffmpeg_qprocess(self):
         self.log_safe("🚀 [阶段 2/2] 唤醒 FFmpeg 引擎，执行混合压制...", "#f9e2af")
-        clips = self.project_state.get("video_clips", [])
-        a_path = self.project_state.get("audio_path")
-        target_dur = float(self.spin_duration.value())
+        project_state = self._render_project_state()
+        design_state = self._render_design_state()
+        clips = project_state.get("video_clips", [])
+        a_path = project_state.get("audio_path")
+        music_path = project_state.get("music_path")
+        if music_path and not os.path.exists(music_path):
+            music_path = ""
+        target_dur = self._render_duration(project_state, design_state)
+        video_track_target = max(0.001, target_dur - render_tail_padding_seconds())
+        if abs(target_dur - float(self.spin_duration.value())) > 0.01:
+            self.spin_duration.setValue(target_dur)
 
-        v_scale = self.project_state.get("v_scale", 100) / 100.0
-        v_vol = self.project_state.get("v_volume", 100) / 100.0
-        a_vol = self.project_state.get("a_volume", 100) / 100.0
+        v_scale = project_state.get("v_scale", 100) / 100.0
+        v_vol = project_state.get("v_volume", 100) / 100.0
+        a_vol = project_state.get("a_volume", 100) / 100.0
+        music_vol = project_state.get("music_volume", 35) / 100.0
 
-        res_text = self.project_state.get("resolution", "自动检测")
-        proj_w, proj_h = 1080, 1920
-        if "1920x1080" in res_text:
-            proj_w, proj_h = 1920, 1080
-        elif "1080x1080" in res_text:
-            proj_w, proj_h = 1080, 1080
-        elif "自动跟随" in res_text and clips:
-            proj_w, proj_h = get_video_dimensions(clips[0]["path"])
+        res_text = project_state.get("resolution") or get_output_resolution()
+        media_path = clips[0]["path"] if clips else ""
+        proj_w, proj_h = resolution_to_size(res_text, media_path, get_video_dimensions)
 
         video_concat_path = ""
         has_audio = False
@@ -849,13 +1312,17 @@ class DeliverView(QWidget):
                         written += part_dur
                     return written
 
+                remaining_track_dur = video_track_target
                 for clip in clips:
+                    if remaining_track_dur <= 0.001:
+                        break
                     c_start = float(clip.get("start", 0))
                     c_end = float(clip.get("end", 5.0))
-                    c_dur = max(0.001, c_end - c_start)
+                    c_dur = min(max(0.001, c_end - c_start), remaining_track_dur)
                     written_video_dur += write_looped_clip(clip, c_dur)
-                if clips and written_video_dur < target_dur - 0.01:
-                    fill_dur = target_dur - written_video_dur
+                    remaining_track_dur -= c_dur
+                if clips and written_video_dur < video_track_target - 0.01:
+                    fill_dur = video_track_target - written_video_dur
                     write_looped_clip(clips[0], fill_dur)
                     self.log_safe(f"🔁 视频轨短于导出时长，已自动循环补齐 {fill_dur:.1f}s。", "#a6e3a1")
             self.log_safe("🛠️ 已生成物理拼接流: 精确修剪时间点挂载完毕！", "#89b4fa")
@@ -865,13 +1332,26 @@ class DeliverView(QWidget):
         self.render_process.finished.connect(self.on_render_finished)
 
         args = ["-y"]
+        input_idx = 0
+        video_idx = None
         if video_concat_path:
             args.extend(["-f", "concat", "-safe", "0", "-i", video_concat_path])
+            video_idx = input_idx
+            input_idx += 1
         args.extend(["-f", "concat", "-safe", "0", "-i", self.concat_path])
+        sub_idx = input_idx
+        input_idx += 1
+        audio_idx = None
         if a_path:
             args.extend(["-i", a_path])
+            audio_idx = input_idx
+            input_idx += 1
+        music_idx = None
+        if music_path:
+            args.extend(["-stream_loop", "-1", "-i", music_path])
+            music_idx = input_idx
+            input_idx += 1
 
-        sub_idx = 1 if video_concat_path else 0
         fc_parts = []
         audio_map = None
 
@@ -881,22 +1361,24 @@ class DeliverView(QWidget):
             video_guard = f"tpad=stop_mode=clone:stop_duration={target_dur:.3f},trim=duration={target_dur:.3f},setpts=PTS-STARTPTS"
             sub_guard = f"tpad=stop_mode=clone:stop_duration={target_dur:.3f},trim=duration={target_dur:.3f},setpts=PTS-STARTPTS"
             fc_parts.append(f"[0:v]{vf_scale},{vf_crop},format=rgba,{video_guard}[bg];[{sub_idx}:v]format=rgba,scale={proj_w}:{proj_h}:flags=lanczos,{sub_guard}[sub];[bg][sub]overlay=0:0:eof_action=pass:format=auto,format=yuv420p[outv]")
-            if a_path:
-                if has_audio:
-                    fc_parts.append(f"[0:a]volume={v_vol}[va]")
-                else:
-                    fc_parts.append("anullsrc=r=44100:cl=stereo[va]")
-                fc_parts.append(f"[2:a]volume={a_vol}[aa]")
-                fc_parts.append("[va][aa]amix=inputs=2:duration=longest[aout]")
-                audio_map = "[aout]"
-            elif has_audio:
-                fc_parts.append(f"[0:a]volume={v_vol}[va]")
-                audio_map = "[va]"
         else:
             fc_parts.append(f"[{sub_idx}:v]format=rgba,scale={proj_w}:{proj_h}:flags=lanczos,tpad=stop_mode=clone:stop_duration={target_dur:.3f},trim=duration={target_dur:.3f},setpts=PTS-STARTPTS,format=yuv420p[outv]")
-            if a_path:
-                fc_parts.append(f"[1:a]volume={a_vol}[aout]")
-                audio_map = "[aout]"
+
+        audio_sources = []
+        if video_idx is not None and has_audio:
+            fc_parts.append(f"[{video_idx}:a]volume={v_vol:.3f},atrim=duration={target_dur:.3f},asetpts=PTS-STARTPTS[va]")
+            audio_sources.append("[va]")
+        if audio_idx is not None:
+            fc_parts.append(f"[{audio_idx}:a]volume={a_vol:.3f},atrim=duration={target_dur:.3f},asetpts=PTS-STARTPTS[aa]")
+            audio_sources.append("[aa]")
+        if music_idx is not None:
+            fc_parts.append(f"[{music_idx}:a]volume={music_vol:.3f},atrim=duration={target_dur:.3f},asetpts=PTS-STARTPTS[ma]")
+            audio_sources.append("[ma]")
+        if len(audio_sources) == 1:
+            audio_map = audio_sources[0]
+        elif len(audio_sources) > 1:
+            fc_parts.append(f"{''.join(audio_sources)}amix=inputs={len(audio_sources)}:duration=longest:normalize=0,atrim=duration={target_dur:.3f},asetpts=PTS-STARTPTS[aout]")
+            audio_map = "[aout]"
 
         if fc_parts:
             args.extend(["-filter_complex", ";".join(fc_parts)])
@@ -925,7 +1407,7 @@ class DeliverView(QWidget):
             time_str = time_match.group(1)
             h, m, s = map(float, time_str.split(":"))
             curr_sec = h * 3600 + m * 60 + s
-            total_sec = max(0.1, self.spin_duration.value())
+            total_sec = max(0.1, float(self.active_render_duration or self.spin_duration.value()))
             percent = 50 + int((curr_sec / total_sec) * 50)
             self.progress_bar.setValue(min(100, percent))
         if err_out.strip():
@@ -947,6 +1429,7 @@ class DeliverView(QWidget):
             QTimer.singleShot(0, self._start_next_batch_render)
             return
 
+        self._clear_render_job()
         self.btn_render.setEnabled(True)
         if exit_code == 0:
             self.progress_bar.setValue(100)
