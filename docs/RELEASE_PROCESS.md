@@ -60,9 +60,10 @@ The `Release` workflow will:
 11. create GitHub artifact attestations with `actions/attest-build-provenance`;
 12. publish the GitHub release with GitHub-generated notes.
 
-The macOS packages are ad-hoc signed, not Apple Developer ID notarized. If you
-want a Gatekeeper-friendly public macOS release, add Apple signing certificate
-and notarization secrets to the workflow before publishing broadly.
+The macOS `.app` packages are ad-hoc signed when PyInstaller succeeds. If the
+hosted macOS runner cannot produce a standalone `.app`, the workflow uploads a
+`source-runner` fallback package with `run.command`. For a Gatekeeper-friendly
+public macOS release, add Apple signing certificate and notarization secrets.
 
 ## Manual Workflow Release
 

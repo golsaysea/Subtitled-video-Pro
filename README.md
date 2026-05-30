@@ -112,8 +112,10 @@ prepared by the GitHub-hosted runner. The workflow also generates
 `checksums.sha256`, uploads the files to GitHub Releases, and creates GitHub
 artifact attestations with `actions/attest-build-provenance`.
 
-The macOS `.app` bundles are ad-hoc signed in CI. They are not Apple Developer
-ID notarized unless you add Apple signing and notarization secrets later.
+The macOS `.app` bundles are ad-hoc signed in CI when PyInstaller succeeds. If
+the hosted macOS runner cannot produce a standalone bundle, the workflow uploads
+a `source-runner` fallback package with `run.command`. Developer ID notarization
+is not included unless Apple signing and notarization secrets are added later.
 
 ## Verify Release Artifact
 
