@@ -38,6 +38,7 @@ OPEN_FONT_FAMILIES = {
     "Anton": "Google Fonts Anton",
     "Lato": "Google Fonts Lato",
     "Merriweather": "Google Fonts Merriweather",
+    "TikTok Sans": "Google Fonts / TikTok Sans official release",
 }
 
 
@@ -90,11 +91,11 @@ for _font_name, _font_source in OPEN_FONT_FAMILIES.items():
 
 
 STATUS_LABELS = {
-    STATUS_APPROVED: "Approved for commercial use",
+    STATUS_APPROVED: "Legacy approval, treated as personal/non-commercial unless bundled open proof exists",
     STATUS_OPEN: "Open/commercial-safe, keep license when bundling",
-    STATUS_SYSTEM: "System font, review OS/embedding license",
-    STATUS_NONCOMMERCIAL: "Non-commercial/restricted, do not use commercially without a separate license",
-    STATUS_REVIEW: "Unregistered, manual review required",
+    STATUS_SYSTEM: "System/personal-use until OS embedding rights are confirmed",
+    STATUS_NONCOMMERCIAL: "Personal use only / non-commercial unless separate license proof is recorded",
+    STATUS_REVIEW: "Unregistered, treat as personal preview until license proof is recorded",
 }
 
 
@@ -139,6 +140,12 @@ def _infer_style_class(name, record=None):
 def normalize_font_record(name, record):
     record = copy.deepcopy(record) if isinstance(record, dict) else {}
     status = record.get("status") or STATUS_REVIEW
+    if status == STATUS_APPROVED:
+        status = STATUS_NONCOMMERCIAL
+        record["commercial_use"] = "personal_only_registered"
+        existing_notes = str(record.get("notes", "") or "").strip()
+        suffix = "Legacy approved entries are treated as personal/non-commercial unless they are bundled open fonts with license proof."
+        record["notes"] = f"{existing_notes} {suffix}".strip()
     record["status"] = status
     record.setdefault("category", _default_category_for_status(status))
     record.setdefault("style_class", _infer_style_class(name, record))
@@ -209,11 +216,11 @@ def upsert_approved_fonts(font_names):
     for name, record in list(fonts.items()):
         if not isinstance(record, dict):
             continue
-        is_user_approved = (
-            record.get("status") == STATUS_APPROVED
-            and record.get("commercial_use") == "approved_by_user"
+        is_user_registered = (
+            record.get("commercial_use") in ("approved_by_user", "personal_only_registered")
+            and record.get("status") in (STATUS_APPROVED, STATUS_NONCOMMERCIAL)
         )
-        if is_user_approved and _key(name) not in desired:
+        if is_user_registered and _key(name) not in desired:
             del fonts[name]
     existing_by_key = {_key(name): name for name in fonts.keys()}
     for raw_name in font_names or []:
@@ -222,13 +229,16 @@ def upsert_approved_fonts(font_names):
             continue
         old_name = existing_by_key.get(_key(name))
         target_name = old_name or name
+        existing = fonts.get(target_name, {}) if isinstance(fonts.get(target_name), dict) else {}
+        if existing.get("status") == STATUS_OPEN:
+            continue
         fonts[target_name] = {
-            "status": STATUS_APPROVED,
-            "source": "User/company approved font",
-            "commercial_use": "approved_by_user",
-            "category": "team_approved",
+            "status": STATUS_NONCOMMERCIAL,
+            "source": "User-registered local/personal font",
+            "commercial_use": "personal_only_registered",
+            "category": "restricted_noncommercial",
             "style_class": _infer_style_class(target_name),
-            "notes": "Marked as approved in Subtitle Composer settings. Keep the original font license/proof with the team assets.",
+            "notes": "Registered for local/personal use only. Do not bundle, redistribute, or use commercially unless separate license proof is recorded.",
         }
         existing_by_key[_key(target_name)] = target_name
     return save_font_registry(data)
@@ -248,12 +258,6 @@ def upsert_open_font_assets(records):
 
         target_name = existing_by_key.get(_key(family), family)
         existing = fonts.get(target_name, {}) if isinstance(fonts.get(target_name), dict) else {}
-        existing_status = existing.get("status")
-        keep_user_approval = (
-            existing_status == STATUS_APPROVED
-            and existing.get("commercial_use") == "approved_by_user"
-        )
-        keep_restricted = existing_status == STATUS_NONCOMMERCIAL
         updated = copy.deepcopy(existing)
         updated.update({
             "source": record.get("source") or updated.get("source") or "Bundled open font asset",
@@ -266,9 +270,8 @@ def upsert_open_font_assets(records):
             "category": "open_commercial_safe",
             "style_class": record.get("style_class") or updated.get("style_class") or _infer_style_class(family, record),
         })
-        if not keep_user_approval and not keep_restricted:
-            updated["status"] = STATUS_OPEN
-            updated["commercial_use"] = "generally_allowed"
+        updated["status"] = STATUS_OPEN
+        updated["commercial_use"] = "generally_allowed"
         fonts[target_name] = updated
         existing_by_key[_key(target_name)] = target_name
 
@@ -290,23 +293,23 @@ def reset_to_open_font_policy():
     return save_font_registry(data)
 
 
-def safe_font_names(include_approved=True, include_open=True):
+def safe_font_names(include_approved=False, include_open=True):
     data = load_font_registry(write_back=False)
     names = []
     for name, record in data.get("fonts", {}).items():
         if not isinstance(record, dict):
             continue
         status = record.get("status")
-        if (include_open and status == STATUS_OPEN) or (include_approved and status == STATUS_APPROVED):
+        if include_open and status == STATUS_OPEN:
             names.append(name)
     return sorted(set(names), key=lambda item: item.casefold())
 
 
-def safe_font_keys(include_approved=True, include_open=True):
+def safe_font_keys(include_approved=False, include_open=True):
     return {_key(name) for name in safe_font_names(include_approved=include_approved, include_open=include_open)}
 
 
-def is_safe_font(font_name, include_approved=True, include_open=True):
+def is_safe_font(font_name, include_approved=False, include_open=True):
     return _key(font_name) in safe_font_keys(include_approved=include_approved, include_open=include_open)
 
 
@@ -335,7 +338,7 @@ def _record_for_font(font_name, registry=None):
         "style_class": _infer_style_class(font_name),
         "source": "",
         "commercial_use": "unknown",
-        "notes": "This font is not in font_registry.json yet.",
+        "notes": "Not bundled. Treat as personal preview only until license proof is recorded; other users must install or provide this font themselves.",
     }
 
 

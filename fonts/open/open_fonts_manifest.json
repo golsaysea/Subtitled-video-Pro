@@ -1051,6 +1051,126 @@
       "license_file": "sourcesans3/LICENSE.md",
       "license_url": "",
       "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "TikTok Sans",
+      "file": "tiktoksans/TikTokSans[opsz,slnt,wdth,wght].ttf",
+      "source": "TikTok Sans official GitHub release / Google Fonts",
+      "license": "OFL-1.1",
+      "license_file": "tiktoksans/OFL.txt",
+      "license_url": "https://scripts.sil.org/OFL",
+      "weight": "300 900",
+      "style": "normal",
+      "notes": "Downloaded from the official TikTok Sans v4.000 release linked by Google Fonts. Commercial use is allowed under the SIL Open Font License; keep OFL.txt with redistributed font files.",
+      "downloaded_at": "2026-06-03"
+    },
+    {
+      "family": "TikTok Sans 36pt",
+      "file": "tiktoksans/TikTokSans[opsz,slnt,wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "tiktoksans/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "TikTok Sans 36pt Black",
+      "file": "tiktoksans/TikTokSans[opsz,slnt,wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "tiktoksans/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "TikTok Sans 36pt Black Italic",
+      "file": "tiktoksans/TikTokSans[opsz,slnt,wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "tiktoksans/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "TikTok Sans 36pt ExtraBold",
+      "file": "tiktoksans/TikTokSans[opsz,slnt,wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "tiktoksans/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "TikTok Sans 36pt ExtraBold Italic",
+      "file": "tiktoksans/TikTokSans[opsz,slnt,wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "tiktoksans/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "TikTok Sans 36pt Italic",
+      "file": "tiktoksans/TikTokSans[opsz,slnt,wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "tiktoksans/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "TikTok Sans 36pt Light",
+      "file": "tiktoksans/TikTokSans[opsz,slnt,wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "tiktoksans/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "TikTok Sans 36pt Light Italic",
+      "file": "tiktoksans/TikTokSans[opsz,slnt,wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "tiktoksans/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "TikTok Sans 36pt Medium",
+      "file": "tiktoksans/TikTokSans[opsz,slnt,wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "tiktoksans/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "TikTok Sans 36pt Medium Italic",
+      "file": "tiktoksans/TikTokSans[opsz,slnt,wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "tiktoksans/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "TikTok Sans 36pt SemiBold",
+      "file": "tiktoksans/TikTokSans[opsz,slnt,wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "tiktoksans/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
+    },
+    {
+      "family": "TikTok Sans 36pt SemiBold Italic",
+      "file": "tiktoksans/TikTokSans[opsz,slnt,wdth,wght].ttf",
+      "source": "Bundled open font asset",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "tiktoksans/OFL.txt",
+      "license_url": "",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages."
     }
   ]
 }

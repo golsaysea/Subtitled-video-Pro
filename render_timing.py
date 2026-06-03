@@ -27,6 +27,7 @@ CONTINUOUS_ANIMS = {
     "camera_push",
     "depth_push",
     "holy_breath",
+    "typewriter",
 }
 
 INTRO_ANIMS = {"slam_in"}

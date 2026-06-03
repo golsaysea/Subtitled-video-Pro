@@ -5,7 +5,7 @@
 - 项目名称：Subtitle Composer / Subtitled Video Pro
 - 项目路径：`0516`
 - 项目类型：Python desktop app + Vite web tool panels + bundled open font assets
-- 审计时间：2026-05-30
+- 审计时间：2026-06-03
 - 审计基准：公开 GitHub 开源分发
 - 审计范围：直接运行依赖；构建工具、外部可执行组件和字体资产单独列示
 
@@ -17,7 +17,7 @@
 
 原因：当前直接运行依赖中包含 `PyQt6` 与 `PyQt6-WebEngine`。两者在 PyPI 的开源分发路径为 `GPL-3.0-only`，另有 Riverbank 商业许可路径。如果没有商业 PyQt 授权，项目不应以 MIT、Apache-2.0 或闭源专有协议公开分发。
 
-0516 新增的 `fonts/open` 字体包按发布资产审计：当前 manifest 记录 21 个字体文件，许可证为 `OFL-1.1` 或兼容开放字体许可证。字体资产与 GPL-3.0-only 项目分发兼容，但必须保留各字体目录内的 `OFL.txt`、`LICENSE.txt` 或 `LICENSE.md`。
+0516 新增的 `fonts/open` 字体包按发布资产审计：当前 manifest 记录 22 个字体文件，许可证为 `OFL-1.1` 或兼容开放字体许可证。字体资产与 GPL-3.0-only 项目分发兼容，但必须保留各字体目录内的 `OFL.txt`、`LICENSE.txt` 或 `LICENSE.md`。2026-06-03 新增 TikTok Sans v4.000，来源为 TikTok 官方 GitHub release / Google Fonts，许可证为 `OFL-1.1`。
 
 0519 新增的 `web_tools` 设计房间依赖 `konva@10.3.0`，许可证为 `MIT`，用于 Canva 式页面/图层画布编辑。该依赖与 GPL-3.0-only 项目基准兼容，需在发布包中保留 MIT notices。
 
@@ -31,7 +31,7 @@
 | 低风险 | 3 |
 | 需关注 | 2 |
 | 需手动确认 | 0 |
-| 发布相关字体文件 | 21 |
+| 发布相关字体文件 | 22 |
 
 ## 协议分布
 
@@ -41,7 +41,7 @@
 | Apache-2.0 | 2 | 40% | 与 GPL-3.0-only 兼容；需保留 notices |
 | MIT | 1 | 20% | 与 GPL-3.0-only 兼容；需保留 notices |
 
-字体资产：21 个字体文件，按 `OFL-1.1` 或兼容开放字体许可证单独记录，不计入直接运行依赖总数。
+字体资产：22 个字体文件，按 `OFL-1.1` 或兼容开放字体许可证单独记录，不计入直接运行依赖总数。
 
 ## 依赖明细
 
@@ -57,7 +57,7 @@
 
 | 资产 | 数量 | 协议 | 来源 | 结论 |
 | --- | ---: | --- | --- | --- |
-| Open font pack | 21 个字体文件 | OFL-1.1 或兼容开放字体许可证 | `fonts/open/open_fonts_manifest.json` | 可随 GPL-3.0-only 项目发布；保留字体许可证文件 |
+| Open font pack | 22 个字体文件 | OFL-1.1 或兼容开放字体许可证 | `fonts/open/open_fonts_manifest.json` | 可随 GPL-3.0-only 项目发布；保留字体许可证文件 |
 | FFmpeg | Release workflow bundles FFmpeg/FFprobe under `vendor/<platform>/ffmpeg` | GPL/LGPL depends on build variant; Windows Gyan essentials builds are GPLv3 | https://www.gyan.dev/ffmpeg/builds/ and https://ffmpeg.org/legal.html | Preserve upstream notices and source-offer information with release materials |
 | PyInstaller | 构建工具 | GPL-2.0-or-later with bootloader exception | https://pyinstaller.org/en/stable/license.html | 可用于构建；保留 provenance |
 | Playwright browsers | release build 安装 Chromium | Chromium/browser 组件许可证 | https://playwright.dev/python/ | 若被打进产物，持续跟踪 notices |

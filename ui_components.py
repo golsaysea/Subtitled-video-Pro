@@ -462,6 +462,23 @@ def _style_display_text(text, style):
             sub_words[s_idx] = sub_w.replace(letters, pure_w.capitalize(), 1)
     return " ".join(sub_words)
 
+def _css_font_stack(family):
+    primary = str(family or "Arial").replace("\\", "\\\\").replace("'", "\\'")
+    fallbacks = [
+        "TikTok Sans",
+        "Noto Sans SC",
+        "Noto Sans",
+        "Source Han Sans SC",
+        "Microsoft YaHei",
+        "Arial",
+    ]
+    stack = [f"'{primary}'"]
+    for fallback in fallbacks:
+        if fallback.casefold() != primary.casefold():
+            stack.append(f"'{fallback}'")
+    stack.append("sans-serif")
+    return ", ".join(stack)
+
 def _apply_balanced_breaks(words, line_capacity, max_lines, style=None):
     cleaned = []
     for word in words:
@@ -507,6 +524,17 @@ def subtitle_layout_capacity(style, proj_w=1080):
     width_pct = max(28.0, min(92.0, width_pct))
     max_lines = max(1, min(4, int(style.get("max_lines", 2) or 2)))
     line_capacity = max(3.5, (float(proj_w) * width_pct / 100.0) / size * 0.92)
+    if style.get("layout_mode", "standard") == "contrast":
+        try:
+            emphasis_scale = max(100.0, float(style.get("emphasis_scale", 145) or 145)) / 100.0
+        except Exception:
+            emphasis_scale = 1.45
+        try:
+            small_scale = max(0.78, min(1.0, float(style.get("contrast_small_scale", 0.74) or 0.74)))
+        except Exception:
+            small_scale = 0.74
+        contrast_guard = 1.0 + max(0.0, emphasis_scale - 1.0) * 0.42 + max(0.0, 1.0 - small_scale) * 0.16
+        line_capacity = max(3.5, line_capacity / min(1.32, contrast_guard))
     return line_capacity, max_lines, max(4.0, line_capacity * max_lines)
 
 def rebalance_subtitle_layout(subs, fallback_style=None, default_pos=(0.0, 25.0), proj_w=1080, min_gap=0.01, force_standard_box=False, allow_split=True):
@@ -518,9 +546,15 @@ def rebalance_subtitle_layout(subs, fallback_style=None, default_pos=(0.0, 25.0)
         base = copy.deepcopy(sub)
         style = copy.deepcopy(fallback_style)
         style.update(copy.deepcopy(base.get("style", {})))
-        is_standard = style.get("layout_mode", "standard") == "standard"
+        layout_mode = style.get("layout_mode", "standard")
+        is_standard = layout_mode == "standard"
+        is_reflowable = layout_mode in ("standard", "contrast")
         if force_standard_box and is_standard:
             style["box_layout"] = "fixed"
+            if float(style.get("box_width", 0) or 0) <= 0:
+                style["box_width"] = 74.0
+            style["max_lines"] = max(1, min(4, int(style.get("max_lines", 2) or 2)))
+        elif force_standard_box and is_reflowable:
             if float(style.get("box_width", 0) or 0) <= 0:
                 style["box_width"] = 74.0
             style["max_lines"] = max(1, min(4, int(style.get("max_lines", 2) or 2)))
@@ -534,7 +568,7 @@ def rebalance_subtitle_layout(subs, fallback_style=None, default_pos=(0.0, 25.0)
             balanced.append(base)
             continue
 
-        if not is_standard:
+        if not is_reflowable:
             base["style"] = style
             base["text"] = _subtitle_plain_text(words)
             base["words"] = words
@@ -901,6 +935,7 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
     layout_mode = style.get("layout_mode", "standard")
     layout_variant = style.get("layout_variant", "auto")
     emphasis_scale = max(100, int(style.get("emphasis_scale", 145)))
+    contrast_small_scale = max(0.78, min(1.0, float(style.get("contrast_small_scale", 0.74) or 0.74)))
     box_layout = style.get("box_layout", "auto")
     use_hl = style.get("use_hl", True)
     hl_glow = style.get("hl_glow", False)
@@ -909,6 +944,9 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
 
     anim_type = style.get("anim_type", "pop")
     font_motion = style.get("font_motion", "none")
+    typewriter_motion = anim_type == "typewriter" or font_motion == "typewriter_left"
+    if anim_type == "typewriter":
+        anim_type = "none"
     hl_motion = style.get("hl_motion", "stable")
     pop_speed = max(0.05, float(style.get("pop_speed", 0.18)))
     pop_bounce = max(100, int(style.get("pop_bounce", 128)))
@@ -957,6 +995,24 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
 
     content_indices = [i for i, ww in enumerate(words) if _clean_word_text(ww)]
     content_center = (content_indices[0] + content_indices[-1]) / 2.0 if content_indices else (len(words) - 1) / 2.0
+    typewriter_word_order = {}
+    typewriter_word_interval = pop_speed
+    typewriter_intro_duration = max(0.05, min(0.22, pop_speed * 0.9))
+    typewriter_active_order = 0
+    typewriter_active_p = 1.0
+    if typewriter_motion:
+        word_count = max(1, len(content_indices))
+        available_span = max(0.18, min(clip_dur * 0.88, pop_speed * word_count))
+        typewriter_word_interval = max(0.045, min(pop_speed, available_span / word_count))
+        typewriter_intro_duration = max(0.05, min(0.20, typewriter_word_interval * 1.15))
+        typewriter_word_order = {word_idx: order for order, word_idx in enumerate(content_indices)}
+    typewriter_group_shift_em = 0.0
+    if typewriter_motion and content_indices:
+        elapsed = max(0.0, current_time - clip_start)
+        typewriter_active_order = max(0, min(len(content_indices) - 1, int(elapsed / max(0.001, typewriter_word_interval))))
+        active_start = clip_start + typewriter_active_order * typewriter_word_interval
+        typewriter_active_p = ease_out_cubic((current_time - active_start) / typewriter_intro_duration)
+        typewriter_group_shift_em = 0.28 * (1.0 - typewriter_active_p)
     head_letter_large_variant = layout_mode == "reel_stack" and layout_variant in ("head-letter-large", "initial-large")
     head_large_variant = layout_mode == "reel_stack" and layout_variant in ("head-large", "head-emphasis", "head-only", "head-uppercase")
     tail_large_variant = layout_mode == "reel_stack" and layout_variant in ("tail-large", "tail-emphasis", "tail-only", "tail-uppercase")
@@ -967,6 +1023,50 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
             align = "center" if align_seed % 5 == 0 else "left"
         else:
             align = "left" if align_seed % 2 == 0 else "center"
+    center_left_mode = align == "center_left"
+    stable_left_box_mode = center_left_mode or (typewriter_motion and align == "left")
+    typewriter_center_push_em = 0.0
+    if typewriter_motion and stable_left_box_mode and content_indices:
+        def _typewriter_char_width_em(ch):
+            code = ord(ch)
+            if ch.isspace():
+                return 0.32
+            if (
+                0x3400 <= code <= 0x9FFF
+                or 0xF900 <= code <= 0xFAFF
+                or 0x3040 <= code <= 0x30FF
+                or 0xAC00 <= code <= 0xD7AF
+            ):
+                return 1.0
+            if ch in "ilI.,'`|!:":
+                return 0.30
+            if ch in "mwMW@#%&":
+                return 0.82
+            if ch.isalpha() or ch.isdigit():
+                return 0.56
+            return 0.44
+
+        def _typewriter_word_width_em(word_idx):
+            text = _clean_word_text(words[word_idx])
+            if not text:
+                return 0.0
+            return max(0.34, sum(_typewriter_char_width_em(ch) for ch in text))
+
+        def _typewriter_span_width_em(order):
+            if order < 0:
+                return 0.0
+            visible_indices = content_indices[:order + 1]
+            word_width = sum(_typewriter_word_width_em(word_idx) for word_idx in visible_indices)
+            gap_width = max(0, len(visible_indices) - 1) * (0.34 + max(0.0, float(word_spacing or 0)) / max(28.0, float(size or 100)))
+            return word_width + gap_width
+
+        prev_width_em = _typewriter_span_width_em(typewriter_active_order - 1)
+        curr_width_em = _typewriter_span_width_em(typewriter_active_order)
+        revealed_width_em = prev_width_em + (curr_width_em - prev_width_em) * typewriter_active_p
+        font_size_vw = max(0.001, float(size or 100) * 100.0 / max(1.0, float(proj_w or 1080)))
+        box_width_em = (box_width if box_width > 0 else 74.0) / font_size_vw
+        max_push_em = max(1.4, min(4.8, box_width_em * 0.48))
+        typewriter_center_push_em = min(max_push_em, max(0.0, (box_width_em - revealed_width_em) * 0.5))
     if layout_mode in ("mixed_reel", "smart_caption") and content_indices:
         mix_seed_text = "".join(_clean_word_text(words[i]) for i in content_indices)
         mix_seed = int(clip_start * 1000) + sum(ord(ch) for ch in mix_seed_text)
@@ -1158,6 +1258,14 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
                     html_words_bg.append("<br>")
             continue
 
+        typewriter_reveal_start = clip_start
+        typewriter_local_p = 1.0
+        if typewriter_motion:
+            typewriter_reveal_start = clip_start + typewriter_word_order.get(idx, 0) * typewriter_word_interval
+            if current_time < typewriter_reveal_start:
+                continue
+            typewriter_local_p = ease_out_cubic((current_time - typewriter_reveal_start) / typewriter_intro_duration)
+
         inserted_break = False
         if has_newline and idx > 0:
             html_words_fg.append("<br>")
@@ -1197,6 +1305,9 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
             holy_reveal_start = min(holy_reveal_start, latest_reveal_start)
             word_started = current_time >= holy_reveal_start
             t = current_time - holy_reveal_start
+        elif typewriter_motion:
+            word_started = current_time >= typewriter_reveal_start
+            t = current_time - typewriter_reveal_start
         else:
             word_started = current_time >= w_start
             t = current_time - w_start
@@ -1348,11 +1459,11 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
         if layout_mode in ("contrast", "triple"):
             if idx in emphasis_idx:
                 layout_font_scale = emphasis_scale / 100.0
-                per_word_translate = -0.06 if layout_mode == "contrast" else -0.04
+                per_word_translate = -0.035 if layout_mode == "contrast" else -0.04
                 word_margin_right = vw(max(0, word_spacing * 0.55 + 1.4))
             elif idx in small_idx:
-                layout_font_scale = 0.74 if layout_mode == "contrast" else 0.80
-                per_word_translate = 0.03 if layout_mode == "contrast" else 0.02
+                layout_font_scale = contrast_small_scale if layout_mode == "contrast" else 0.80
+                per_word_translate = 0.018 if layout_mode == "contrast" else 0.02
                 word_margin_right = vw(max(0, word_spacing * 0.35 + 0.6))
             else:
                 word_margin_right = vw(max(0, word_spacing * 0.45 + 1.0))
@@ -1439,6 +1550,11 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
             pulse = max(0.0, math.sin(current_time * 8.0 + idx * 0.55))
             current_scale *= 1.0 + pulse * 0.11
             current_translate_em -= pulse * 0.025
+        if typewriter_motion and word_started:
+            seed = (idx * 37 + int(clip_start * 1000) * 13) % 17
+            slide = 0.18 + (seed / 16.0) * 0.24
+            current_translate_x_em += slide * (1.0 - typewriter_local_p)
+            current_translate_em += (((seed * 5) % 7) - 3) * 0.006 * (1.0 - typewriter_local_p)
         if current_word_idx is not None and hl_motion in ("pop", "push"):
             distance = idx - current_word_idx
             active_word = words[current_word_idx]
@@ -1454,7 +1570,7 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
                 current_translate_x_em += (0.16 + 0.055 * local_p) * (1 if distance > 0 else -1)
             elif hl_motion == "push" and abs(distance) == 2:
                 current_translate_x_em += (0.060 + 0.025 * local_p) * (1 if distance > 0 else -1)
-        if stable_word_boxes:
+        if stable_word_boxes and not typewriter_motion:
             current_translate_x_em = 0.0
             if font_motion in ("wave", "drift"):
                 current_translate_em = per_word_translate
@@ -1522,7 +1638,8 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
             word_css_fg += f" background-color: rgba({hl_r}, {hl_g}, {hl_b}, {hl_bg_a}); border-radius: {hl_rad_vw}; box-shadow: 0 0 0 {hl_spread_vw} rgba({hl_r}, {hl_g}, {hl_b}, {hl_bg_a});"
 
         safe_txt = html.escape(clean_txt, quote=False)
-        if head_letter_large_variant and idx == first_content_idx:
+        safe_txt_bg = safe_txt
+        if head_letter_large_variant and idx == first_content_idx and not typewriter_motion:
             initial_match = re.search(r"[A-Za-z0-9\u4e00-\u9fff]", clean_txt)
             if initial_match:
                 initial_pos = initial_match.start()
@@ -1534,12 +1651,17 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
                     f"{html.escape(clean_txt[initial_pos], quote=False)}</span>"
                     f"{html.escape(clean_txt[initial_pos + 1:], quote=False)}"
                 )
+                safe_txt_bg = safe_txt
         html_words_fg.append(f"<span style='{word_css_fg}'>{safe_txt}</span>")
-        html_words_bg.append(f"<span style='{word_css_bg}'>{safe_txt}</span>")
+        html_words_bg.append(f"<span style='{word_css_bg}'>{safe_txt_bg}</span>")
 
         if idx < len(words) - 1:
             next_raw = str(words[idx + 1].get("text") or words[idx + 1].get("word") or "")
-            if "\n" not in next_raw and not _layout_breaks_before(idx + 1):
+            next_is_visible = True
+            if typewriter_motion:
+                next_reveal_start = clip_start + typewriter_word_order.get(idx + 1, 9999) * typewriter_word_interval
+                next_is_visible = current_time >= next_reveal_start
+            if next_is_visible and "\n" not in next_raw and not _layout_breaks_before(idx + 1):
                 spacer = "<span style='display:inline-block; width:0.14em;'></span>" if layout_mode in ("contrast", "triple", "reel_stack", "random_focus", "side_steps", "axis_stack", "quote_stack") else " "
                 html_words_fg.append(spacer)
                 if bg_mode in ("tape", "block", "sweep"):
@@ -1550,6 +1672,10 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
 
     inner_transform_parts = []
     inner_extra_css = ""
+    if typewriter_motion and typewriter_center_push_em > 0.001:
+        inner_transform_parts.append(f"translateX({typewriter_center_push_em:.3f}em)")
+    elif typewriter_motion and typewriter_group_shift_em > 0.001:
+        inner_transform_parts.append(f"translateX({typewriter_group_shift_em:.3f}em)")
     if anim_type == "roll_up":
         y_offset = (1.0 - clip_progress * 2) * 50
         inner_transform_parts.append(f"translateY({y_offset}vh)")
@@ -1603,11 +1729,12 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
         inner_extra_css = f"opacity: {opacity:.3f}; filter: blur({vw(blur)}) drop-shadow({vw(8)} {vw(5)} {vw(1)} rgba(0,0,0,0.48)); transform-style: preserve-3d;"
     inner_transform = ""
     if inner_transform_parts:
-        inner_transform = f"transform: {' '.join(inner_transform_parts)}; transform-origin: center center; {inner_extra_css}"
+        transform_origin = "left center" if stable_left_box_mode or align == "left" else "center center"
+        inner_transform = f"transform: {' '.join(inner_transform_parts)}; transform-origin: {transform_origin}; {inner_extra_css}"
 
     # 👑 新增平滑边缘及抗锯齿
     base_wrapper_css = f"""
-        font-family: '{f_fam}', sans-serif;
+        font-family: {_css_font_stack(f_fam)};
         font-size: {size_vw};
         font-weight: {f_weight};
         font-style: {f_style};
@@ -1624,9 +1751,14 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
         white-space: normal;
     """
 
+    if center_left_mode:
+        align = "left"
     j_map = {"center": "center", "left": "start", "right": "end", "justify": "center"}
     align_item = j_map.get(align, "center")
-    if box_width > 0:
+    if stable_left_box_mode:
+        width_value = f"{(box_width if box_width > 0 else 74.0):.4f}vw"
+        width_css = f"width: {width_value}; max-width: 92vw;"
+    elif box_width > 0:
         width_value = f"{box_width:.4f}vw"
         if box_layout == "fixed":
             width_css = f"width: {width_value}; max-width: 92vw;"
@@ -1641,7 +1773,7 @@ def render_subtitle_html(sub, current_time, proj_w=1080):
 
     height_css = f"max-height: {box_height:.4f}vh;" if box_height > 0 else ""
     line_guard_css = ""
-    if layout_mode == "standard" and max_lines > 0:
+    if layout_mode in ("standard", "contrast") and max_lines > 0:
         line_guard_css = f"--sub-max-lines: {max_lines};"
     overflow_css = "hidden" if box_height > 0 else "visible"
     outer_box_style = f"{width_css} {height_css} {line_guard_css} margin: 0 auto; outline: none; text-align: {align}; position: relative; {mask_css} transform: rotate({rot}deg); overflow: {overflow_css}; transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);"
@@ -1943,7 +2075,7 @@ def render_design_html(design_state, current_time, proj_w=1080, proj_h=1920):
             bg_css = f"background:{html.escape(bg, quote=True)}; border-radius:0.55vw; padding:0.5vw 0.85vw;"
         shadow_css = "text-shadow:0 0 0.45vw rgba(0,0,0,0.62), 0 0.28vw 0.85vw rgba(0,0,0,0.38);" if layer.get("shadow", True) else "text-shadow:none;"
         layer_html.append(
-            f"<div style='{common} color:{fill}; font-family:\"{family}\", sans-serif; "
+            f"<div style='{common} color:{fill}; font-family:{_css_font_stack(family)}; "
             f"font-size:{font_size:.5f}vw; font-weight:{weight}; line-height:{line_height}; "
             f"text-align:{align}; white-space:pre-wrap; overflow:hidden; {shadow_css} {bg_css}'>{text}</div>"
         )

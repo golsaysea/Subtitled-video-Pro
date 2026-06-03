@@ -360,11 +360,13 @@ class SettingsView(QWidget):
 
         lbl_font_title = QLabel("字体版权登记")
         lbl_font_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #f9e2af; border: none;")
+        lbl_font_title.setText("字体个人授权登记")
         font_layout.addWidget(lbl_font_title)
 
         lbl_font_desc = QLabel("把已经由团队确认可商用的字体写在这里，每行一个字体名。工程体检会用这份登记表标记字体风险。系统字体和未登记字体仍会提示复核。")
         lbl_font_desc.setWordWrap(True)
         lbl_font_desc.setStyleSheet("color: #a6adc8; font-size: 13px; border: none;")
+        lbl_font_desc.setText("这里登记的是你本机可个人使用、但不随软件或模板分发的字体。真正可打包的字体只来自 fonts/open 开源字体清单；其他用户需要自己安装或提供授权。")
         font_layout.addWidget(lbl_font_desc)
 
         self.lbl_font_registry = QLabel("")
@@ -378,6 +380,7 @@ class SettingsView(QWidget):
 
         self.txt_approved_fonts = QTextEdit()
         self.txt_approved_fonts.setPlaceholderText("例如:\nNoto Sans SC\nSource Han Sans SC\n你的品牌授权字体")
+        self.txt_approved_fonts.setPlaceholderText("例如:\n你本机安装的个人授权字体\n品牌字体本机预览名\n不可随包分发的字体")
         self.txt_approved_fonts.setMaximumHeight(92)
         self.txt_approved_fonts.setStyleSheet("background-color: #11111b; color: #f9e2af; border: 1px solid #45475a; border-radius: 6px; padding: 8px; font-family: Consolas, 'Microsoft YaHei';")
         font_layout.addWidget(self.txt_approved_fonts)
@@ -652,15 +655,19 @@ class SettingsView(QWidget):
         try:
             data = load_font_registry()
             fonts = data.get("fonts", {})
-            approved = [
+            registered = [
                 name for name, record in sorted(fonts.items(), key=lambda item: item[0].casefold())
-                if isinstance(record, dict) and record.get("status") == "approved"
+                if isinstance(record, dict)
+                and record.get("status") == STATUS_NONCOMMERCIAL
+                and record.get("commercial_use") in ("personal_only_registered", "approved_by_user")
             ]
-            self.txt_approved_fonts.setPlainText("\n".join(approved))
+            self.txt_approved_fonts.setPlainText("\n".join(registered))
+            approved = registered
             open_count = sum(1 for record in fonts.values() if isinstance(record, dict) and record.get("status") == "open")
             restricted_count = sum(1 for record in fonts.values() if isinstance(record, dict) and record.get("status") == STATUS_NONCOMMERCIAL)
             review_count = sum(1 for record in fonts.values() if isinstance(record, dict) and record.get("status") == "review")
             self.lbl_font_registry.setText(f"登记文件: {FONT_REGISTRY_FILE}\n开源白名单 {open_count} 个；手动确认 {len(approved)} 个；待确认 {review_count} 个。")
+            self.lbl_font_registry.setText(f"登记文件: {FONT_REGISTRY_FILE}\n开源打包 {open_count} 个；个人/不可商用登记 {len(registered)} 个；待确认 {review_count} 个。")
             if restricted_count:
                 self.lbl_font_registry.setText(self.lbl_font_registry.text() + f"\nRestricted/non-commercial {restricted_count} fonts.")
         except Exception as e:

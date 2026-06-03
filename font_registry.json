@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updated_at": "2026-05-30 10:24:28",
+  "updated_at": "2026-06-03 20:07:24",
   "fonts": {
     "Segoe UI": {
       "status": "system",
@@ -1341,6 +1341,162 @@
       "status": "open",
       "category": "open_commercial_safe",
       "style_class": "sans"
+    },
+    "TikTok Sans": {
+      "status": "open",
+      "source": "TikTok Sans official GitHub release / Google Fonts",
+      "commercial_use": "generally_allowed",
+      "notes": "Downloaded from the official TikTok Sans v4.000 release linked by Google Fonts. Commercial use is allowed under the SIL Open Font License; keep OFL.txt with redistributed font files.",
+      "category": "open_commercial_safe",
+      "style_class": "sans",
+      "bundled_file": "tiktoksans/TikTokSans[opsz,slnt,wdth,wght].ttf",
+      "license": "OFL-1.1",
+      "license_file": "tiktoksans/OFL.txt",
+      "license_url": "https://scripts.sil.org/OFL"
+    },
+    "TikTok Sans 36pt": {
+      "source": "Bundled open font asset",
+      "commercial_use": "generally_allowed",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages.",
+      "bundled_file": "tiktoksans/TikTokSans[opsz,slnt,wdth,wght].ttf",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "tiktoksans/OFL.txt",
+      "license_url": "",
+      "category": "open_commercial_safe",
+      "style_class": "sans",
+      "status": "open"
+    },
+    "TikTok Sans 36pt Black": {
+      "source": "Bundled open font asset",
+      "commercial_use": "generally_allowed",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages.",
+      "bundled_file": "tiktoksans/TikTokSans[opsz,slnt,wdth,wght].ttf",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "tiktoksans/OFL.txt",
+      "license_url": "",
+      "category": "open_commercial_safe",
+      "style_class": "sans",
+      "status": "open"
+    },
+    "TikTok Sans 36pt Black Italic": {
+      "source": "Bundled open font asset",
+      "commercial_use": "generally_allowed",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages.",
+      "bundled_file": "tiktoksans/TikTokSans[opsz,slnt,wdth,wght].ttf",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "tiktoksans/OFL.txt",
+      "license_url": "",
+      "category": "open_commercial_safe",
+      "style_class": "sans",
+      "status": "open"
+    },
+    "TikTok Sans 36pt ExtraBold": {
+      "source": "Bundled open font asset",
+      "commercial_use": "generally_allowed",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages.",
+      "bundled_file": "tiktoksans/TikTokSans[opsz,slnt,wdth,wght].ttf",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "tiktoksans/OFL.txt",
+      "license_url": "",
+      "category": "open_commercial_safe",
+      "style_class": "sans",
+      "status": "open"
+    },
+    "TikTok Sans 36pt ExtraBold Italic": {
+      "source": "Bundled open font asset",
+      "commercial_use": "generally_allowed",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages.",
+      "bundled_file": "tiktoksans/TikTokSans[opsz,slnt,wdth,wght].ttf",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "tiktoksans/OFL.txt",
+      "license_url": "",
+      "category": "open_commercial_safe",
+      "style_class": "sans",
+      "status": "open"
+    },
+    "TikTok Sans 36pt Italic": {
+      "source": "Bundled open font asset",
+      "commercial_use": "generally_allowed",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages.",
+      "bundled_file": "tiktoksans/TikTokSans[opsz,slnt,wdth,wght].ttf",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "tiktoksans/OFL.txt",
+      "license_url": "",
+      "category": "open_commercial_safe",
+      "style_class": "sans",
+      "status": "open"
+    },
+    "TikTok Sans 36pt Light": {
+      "source": "Bundled open font asset",
+      "commercial_use": "generally_allowed",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages.",
+      "bundled_file": "tiktoksans/TikTokSans[opsz,slnt,wdth,wght].ttf",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "tiktoksans/OFL.txt",
+      "license_url": "",
+      "category": "open_commercial_safe",
+      "style_class": "sans",
+      "status": "open"
+    },
+    "TikTok Sans 36pt Light Italic": {
+      "source": "Bundled open font asset",
+      "commercial_use": "generally_allowed",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages.",
+      "bundled_file": "tiktoksans/TikTokSans[opsz,slnt,wdth,wght].ttf",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "tiktoksans/OFL.txt",
+      "license_url": "",
+      "category": "open_commercial_safe",
+      "style_class": "sans",
+      "status": "open"
+    },
+    "TikTok Sans 36pt Medium": {
+      "source": "Bundled open font asset",
+      "commercial_use": "generally_allowed",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages.",
+      "bundled_file": "tiktoksans/TikTokSans[opsz,slnt,wdth,wght].ttf",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "tiktoksans/OFL.txt",
+      "license_url": "",
+      "category": "open_commercial_safe",
+      "style_class": "sans",
+      "status": "open"
+    },
+    "TikTok Sans 36pt Medium Italic": {
+      "source": "Bundled open font asset",
+      "commercial_use": "generally_allowed",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages.",
+      "bundled_file": "tiktoksans/TikTokSans[opsz,slnt,wdth,wght].ttf",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "tiktoksans/OFL.txt",
+      "license_url": "",
+      "category": "open_commercial_safe",
+      "style_class": "sans",
+      "status": "open"
+    },
+    "TikTok Sans 36pt SemiBold": {
+      "source": "Bundled open font asset",
+      "commercial_use": "generally_allowed",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages.",
+      "bundled_file": "tiktoksans/TikTokSans[opsz,slnt,wdth,wght].ttf",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "tiktoksans/OFL.txt",
+      "license_url": "",
+      "category": "open_commercial_safe",
+      "style_class": "sans",
+      "status": "open"
+    },
+    "TikTok Sans 36pt SemiBold Italic": {
+      "source": "Bundled open font asset",
+      "commercial_use": "generally_allowed",
+      "notes": "Bundled with Subtitle Composer as an open/commercial-safe font. Keep the font license when redistributing project packages.",
+      "bundled_file": "tiktoksans/TikTokSans[opsz,slnt,wdth,wght].ttf",
+      "license": "OFL-1.1 or compatible open font license",
+      "license_file": "tiktoksans/OFL.txt",
+      "license_url": "",
+      "category": "open_commercial_safe",
+      "style_class": "sans",
+      "status": "open"
     }
   }
 }

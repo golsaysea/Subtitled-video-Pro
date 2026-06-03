@@ -55,7 +55,7 @@ class TimelineHeader(QWidget):
             ("T2", "正文", c["warn"]),
             ("T1", "蒙版", c["warn"]),
             ("V1", "画面", c["accent"]),
-            ("A1", "原声", c["accent_2"]),
+            ("A1", "原声/配乐", c["accent_2"]),
             ("A2", "配音", c["accent_2"]),
             ("D1", "设计", "#cba6f7"),
             ("D2", "装饰", "#f5c2e7"),
@@ -97,6 +97,7 @@ class ClipItem(QGraphicsRectItem):
         # 👑 动态坐标定位
         if clip_type == "sub": y_pos = HEADER_H + self.track_idx * TRACK_H
         elif clip_type == "video": y_pos = HEADER_H + TRACK_H * 3
+        elif clip_type == "music": y_pos = HEADER_H + TRACK_H * 4 + 5
         elif clip_type == "design": y_pos = HEADER_H + max(6, min(7, self.track_idx)) * TRACK_H
         else: y_pos = HEADER_H + TRACK_H * 5 + 5 # 假设独立的配音永远在最底下A2
         
@@ -105,7 +106,7 @@ class ClipItem(QGraphicsRectItem):
         self.setFlags(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable | QGraphicsItem.GraphicsItemFlag.ItemIsMovable | QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges)
         self.setAcceptHoverEvents(True)
         if clip_type == "video": self.base_color = QColor("#89b4fa")
-        elif clip_type == "audio": self.base_color = QColor("#a6e3a1")
+        elif clip_type in ("audio", "music"): self.base_color = QColor("#a6e3a1")
         elif clip_type == "design": self.base_color = QColor("#cba6f7")
         else: self.base_color = QColor("#f9e2af")
         self.resize_mode = None; self.start_rect = None; self.start_scene_pos = None
@@ -114,6 +115,8 @@ class ClipItem(QGraphicsRectItem):
         return self.scene().views()[0].controller if self.scene() and self.scene().views() else None
 
     def _edit_mode_enabled(self):
+        if self.clip_type == "music":
+            return False
         controller = self._controller()
         return bool(getattr(controller, "edit_mode", False))
 
@@ -205,7 +208,7 @@ class ClipItem(QGraphicsRectItem):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         controller = self.scene().views()[0].controller if self.scene() and self.scene().views() else None
         c = _timeline_colors(controller)
-        clip_color = c["accent"] if self.clip_type == "video" else c["accent_2"] if self.clip_type == "audio" else "#cba6f7" if self.clip_type == "design" else c["warn"]
+        clip_color = c["accent"] if self.clip_type == "video" else c["warn"] if self.clip_type == "music" else c["accent_2"] if self.clip_type == "audio" else "#cba6f7" if self.clip_type == "design" else c["warn"]
         fill = QColor(clip_color)
         fill.setAlpha(220 if self.isSelected() else 178)
         edge = QColor(c["danger"] if self.isSelected() else c["border"])
@@ -215,7 +218,7 @@ class ClipItem(QGraphicsRectItem):
         shine = QColor("#ffffff")
         shine.setAlpha(34 if self.isSelected() else 18)
         painter.fillRect(self.rect().adjusted(1, 1, -1, -self.rect().height() * 0.58), shine)
-        if self.clip_type == "video" and self.media_dur > 0:
+        if self.clip_type in ("video", "music") and self.media_dur > 0:
             loop_w = self.media_dur * self.pps; curr_x = loop_w; painter.setPen(QPen(QColor(c["selected_text"]), 2, Qt.PenStyle.DashLine))
             while curr_x < self.rect().width(): painter.drawLine(QPointF(curr_x, 0), QPointF(curr_x, self.rect().height())); curr_x += loop_w
         if self.clip_type == "audio" and hasattr(controller, 'a_wave_pixmap'):
@@ -355,6 +358,27 @@ class AdvancedTimeline(QGraphicsView):
         if self.controller.state.get("audio_path"):
             audio_name = os.path.basename(self.controller.state.get("audio_path", "")) or "独立配音"
             a_trim = self.controller.state.get("a_trim", [0, 10]); item = ClipItem("audio", 0, a_trim[0], a_trim[1], 5, pps, f"A2 · {audio_name}"); item.signals.clicked.connect(self.on_clip_clicked); item.signals.moved.connect(self.on_clip_moved); item.signals.drag_finished.connect(self.on_clip_drag_finished); self.scene.addItem(item)
+
+        if self.controller.state.get("music_path"):
+            music_name = os.path.basename(self.controller.state.get("music_path", "")) or "配乐"
+            state = self.controller.state
+            try:
+                music_actual_dur = float(state.get("music_dur", 0.0) or 0.0)
+            except Exception:
+                music_actual_dur = 0.0
+            try:
+                music_timeline_dur = float(state.get("music_match_duration", 0.0) or 0.0)
+            except Exception:
+                music_timeline_dur = 0.0
+            if music_timeline_dur <= 0:
+                music_timeline_dur = float(state.get("duration", 1.0) or 1.0)
+            music_timeline_dur = max(0.1, music_timeline_dur)
+            item = ClipItem("music", 0, 0.0, music_timeline_dur, 4, pps, f"M1 · {music_name}", media_dur=music_actual_dur)
+            item.signals.clicked.connect(self.on_clip_clicked)
+            item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
+            if self.controller.selected_track == "music":
+                item.setSelected(True)
+            self.scene.addItem(item)
             
         for i, s in enumerate(self.controller.state.get("subs_data", [])):
             trk_idx = s.get('track', 1); item = ClipItem("sub", i, float(s.get('start', 0)), float(s.get('end', 1)), trk_idx, pps, f"T{3 - trk_idx} · {s.get('text', '').replace(chr(10), ' ')}"); item.signals.clicked.connect(self.on_clip_clicked); item.signals.moved.connect(self.on_clip_moved); item.signals.drag_finished.connect(self.on_clip_drag_finished)
@@ -388,6 +412,11 @@ class AdvancedTimeline(QGraphicsView):
     def on_clip_clicked(self, clip_type, idx):
         if clip_type == "sub": self.controller.current_selected_idx = idx
         elif clip_type == "video": self.controller.current_v_idx = idx
+        elif clip_type == "music":
+            self.controller.selected_track = "music"
+            self.controller.show_canvas_context_toolbar("audio")
+            self.controller._update_workspace_status()
+            return
         elif clip_type == "design" and hasattr(self.controller, "select_design_layer_by_index"):
             self.controller.select_design_layer_by_index(idx)
             return

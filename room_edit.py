@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QP
                              QLabel, QTextEdit, QScrollArea, QTabWidget, QComboBox, 
                              QSlider, QFileDialog, QGridLayout, QFrame, 
                              QCheckBox, QMessageBox, QColorDialog, QFontComboBox, 
-                             QStackedWidget, QDoubleSpinBox, QSpinBox, QSplitter, QInputDialog, QProgressDialog, QLineEdit, QSizePolicy)
+                             QStackedWidget, QDoubleSpinBox, QSpinBox, QSplitter, QInputDialog, QProgressDialog, QLineEdit, QSizePolicy, QDialog)
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEngineSettings
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput, QVideoSink, QVideoFrame
@@ -531,7 +531,7 @@ class EditView(QWidget):
         self.preview_zoom = 1.0; self.preview_pan_x = 0.0; self.preview_pan_y = 0.0
         self.v_wave_pixmap = None; self.a_wave_pixmap = None; self.video_thumbs = []; self.last_video_image = None
         self.proj_width = 1080; self.proj_height = 1920
-        self.safe_font_only = True
+        self.safe_font_only = False
         self.project_autosave_timer = QTimer(self)
         self.project_autosave_timer.setSingleShot(True)
         self.project_autosave_timer.timeout.connect(self.flush_project_autosave)
@@ -1015,6 +1015,8 @@ class EditView(QWidget):
         self.shortcut_preview_zoom_reset.activated.connect(self.reset_preview_view_from_shortcut)
         self.shortcut_focus_canvas = QShortcut(QKeySequence("F11"), self)
         self.shortcut_focus_canvas.activated.connect(self.toggle_canvas_focus_mode)
+        self.shortcut_preview_fullscreen = QShortcut(QKeySequence("Ctrl+F"), self)
+        self.shortcut_preview_fullscreen.activated.connect(self.toggle_preview_fullscreen_from_shortcut)
         self.shortcut_prev_project = QShortcut(QKeySequence("Alt+Left"), self)
         self.shortcut_prev_project.activated.connect(lambda: self.switch_sibling_project(-1))
         self.shortcut_next_project = QShortcut(QKeySequence("Alt+Right"), self)
@@ -1323,7 +1325,7 @@ class EditView(QWidget):
         chunk_row = QHBoxLayout()
         chunk_row.addWidget(QLabel("✂️ 断句模式:", styleSheet="color: #89b4fa; font-weight: bold;"))
         self.chunk_mode = QComboBox()
-        self.chunk_mode.addItems(["短句快速 (1-3字)", "智能重点短句 (3-4词为主)", "自然短句 (1-4词)", "双词节奏 (2词/句)", "三词短句 (3词/句)", "四词短句 (4词/句)", "双行大段 (约10字，智能折行)", "单字轰炸 (1字/句)"])
+        self.chunk_mode.addItems(["短句快速 (1-3字)", "智能重点短句 (3-4词为主)", "智能听译 (4-6词，适配双行按词)", "自然短句 (1-4词)", "双词节奏 (2词/句)", "三词短句 (3词/句)", "四词短句 (4词/句)", "双行大段 (约10字，智能折行)", "单字轰炸 (1字/句)"])
         self.chunk_mode.setStyleSheet("background-color: #313244; color: white; padding: 5px; border-radius: 4px;")
         chunk_row.addWidget(self.chunk_mode, stretch=1)
         self.chunk_mode.currentTextChanged.connect(self._on_chunk_mode_change)
@@ -1465,6 +1467,8 @@ class EditView(QWidget):
         self.player.mediaStatusChanged.connect(self._on_video_media_status_changed)
         self.audio_player = QMediaPlayer(); self.audio_track_output = QAudioOutput(); self.audio_player.setAudioOutput(self.audio_track_output)
         self.audio_player.mediaStatusChanged.connect(self._on_audio_media_status_changed)
+        self.music_player = QMediaPlayer(); self.music_output = QAudioOutput(); self.music_player.setAudioOutput(self.music_output)
+        self.music_player.mediaStatusChanged.connect(self._on_music_media_status_changed)
         
         self.browser = QWebEngineView(); self.browser.settings().setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
         self.browser.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground); self.browser.page().setBackgroundColor(Qt.GlobalColor.transparent)
@@ -1548,6 +1552,7 @@ class EditView(QWidget):
         view_row.addWidget(self.lbl_preview_zoom)
         self.btn_preview_zoom_in = QPushButton("+"); self.btn_preview_zoom_in.setFixedSize(28, 26); self.btn_preview_zoom_in.setToolTip("放大监看预览 Ctrl++"); self.btn_preview_zoom_in.setStyleSheet("background-color: #313244; color: #cdd6f4; font-weight: bold; border-radius: 5px;"); self.btn_preview_zoom_in.clicked.connect(lambda: self.adjust_preview_zoom(1)); view_row.addWidget(self.btn_preview_zoom_in)
         self.btn_preview_reset = QPushButton("100"); self.btn_preview_reset.setFixedSize(38, 26); self.btn_preview_reset.setToolTip("重置监看视窗 Ctrl+0"); self.btn_preview_reset.setStyleSheet("background-color: #313244; color: #a6e3a1; font-family: Consolas; font-weight: bold; border-radius: 5px;"); self.btn_preview_reset.clicked.connect(self.reset_preview_view); view_row.addWidget(self.btn_preview_reset)
+        self.btn_preview_fullscreen = QPushButton("⛶"); self.btn_preview_fullscreen.setFixedSize(32, 26); self.btn_preview_fullscreen.setToolTip("全屏观看预览 Ctrl+F / Esc 退出"); self.btn_preview_fullscreen.setStyleSheet("background-color: #313244; color: #f9e2af; font-weight: bold; border-radius: 5px;"); self.btn_preview_fullscreen.clicked.connect(self.toggle_preview_fullscreen); view_row.addWidget(self.btn_preview_fullscreen)
         view_row.addStretch()
         controls_layout.addLayout(view_row)
         center_layout.addWidget(controls_panel)
@@ -1746,7 +1751,7 @@ class EditView(QWidget):
         nav_strip.setContentsMargins(0, 0, 0, 3)
         nav_strip.setSpacing(5)
         self.sub_page_buttons = []
-        for idx, text_btn in enumerate(["时间", "字体", "动画", "颜色", "底框"]):
+        for idx, text_btn in enumerate(["时间", "字体", "排版", "动画", "颜色", "底框"]):
             btn = create_nav_btn(text_btn, idx)
             self.sub_page_buttons.append(btn)
             nav_strip.addWidget(btn)
@@ -1766,12 +1771,10 @@ class EditView(QWidget):
         s_time_row.addWidget(QLabel("终点 (s):")); self.sub_end_spin = ProScrubDoubleSpinBox(); self.sub_end_spin.setRange(0, 36000); self.sub_end_spin.setSingleStep(0.1); self.sub_end_spin.setLocale(self.eng_locale); self.sub_end_spin.setStyleSheet("background: #25262b; border: 1px solid #313244; color: white; padding: 2px 5px; border-radius: 3px;"); self.sub_end_spin.valueChanged.connect(self._on_sub_time_change); s_time_row.addWidget(self.sub_end_spin)
         duration_layout.addLayout(s_time_row)
         page_timing_layout.addWidget(sec_duration)
-        sec_transform, transform_layout = create_section_frame("📍 变换与排版 (Transform)", "#89b4fa")
+        sec_transform, transform_layout = create_section_frame("📍 变换与位置 (Transform)", "#89b4fa")
         self.pos_x_slider, self.pos_x_spin = create_slider_spinbox(transform_layout, "X 偏移 (%):", -100, 100, 0, self._on_style_change, is_float=True)
         self.pos_y_slider, self.pos_y_spin = create_slider_spinbox(transform_layout, "Y 偏移 (%):", -100, 100, 25, self._on_style_change, is_float=True)
         self.rot_slider, self.rot_spin = create_slider_spinbox(transform_layout, "旋转角度:", -180, 180, 0, self._on_style_change)
-        self.box_width_slider, self.box_width_spin = create_slider_spinbox(transform_layout, "显示区域宽% (0=自动):", 0, 92, 74, self._on_style_change, is_float=True)
-        self.box_height_slider, self.box_height_spin = create_slider_spinbox(transform_layout, "显示区域高% (0=不限):", 0, 50, 0, self._on_style_change, is_float=True)
         page_timing_layout.addWidget(sec_transform)
         sec_mask, mask_layout = create_section_frame("🌫️ 蒙版与遮罩 (Masking)", "#81c8be")
         self.chk_mask_en = QCheckBox("🌟 启用上下羽化遮罩"); self.chk_mask_en.setChecked(False); self.chk_mask_en.stateChanged.connect(self._on_style_change); mask_layout.addWidget(self.chk_mask_en)
@@ -1781,23 +1784,22 @@ class EditView(QWidget):
         page_timing_layout.addStretch(); self.sub_pages.addWidget(page_timing)
 
         page_typo = QWidget(); page_typo_layout = QVBoxLayout(page_typo); page_typo_layout.setSpacing(6); page_typo_layout.setContentsMargins(0, 0, 0, 0)
-        sec_typo, typo_layout = create_section_frame("字体排版", "#a6e3a1")
+        sec_typo, typo_layout = create_section_frame("字体", "#a6e3a1")
         self.font_category_combo = QComboBox(); self.font_category_combo.addItems(["全部字体", "中文优先", "拉丁/英文字体", "等宽字体"]); self.font_category_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.font_category_combo.currentTextChanged.connect(self._set_font_filter); typo_layout.addWidget(self.font_category_combo)
         self.font_category_combo.clear()
-        self.font_category_combo.addItems(["全部字体", "商用安全/开源", "系统/待复核", "中文优先", "拉丁/英文字体", "等宽字体", "无衬线", "衬线", "手写/花体", "装饰/标题"])
+        self.font_category_combo.addItems(["全部字体", "开源打包字体", "个人/不可商用", "系统/待复核", "中文优先", "拉丁/英文字体", "等宽字体", "无衬线", "衬线", "手写/花体", "装饰/标题"])
         font_safe_row = QHBoxLayout()
-        self.chk_safe_fonts = QCheckBox("仅显示商用安全字体")
-        self.chk_safe_fonts.setChecked(True)
-        self.chk_safe_fonts.setStyleSheet("color: #f9e2af; font-weight: bold;")
-        self.chk_safe_fonts.stateChanged.connect(self._on_safe_font_filter_changed)
+        self.safe_font_only = False
+        self.lbl_font_policy = QLabel("开源字体随软件打包；其他字体可自由选择，但按个人/需授权字体提示，不随包分发。")
+        self.lbl_font_policy.setWordWrap(True)
+        self.lbl_font_policy.setStyleSheet("color: #f9e2af; font-size: 12px; font-weight: bold;")
         self.btn_apply_safe_font = QPushButton("替换为开源默认")
         self.btn_apply_safe_font.setStyleSheet("background-color: #313244; color: #f9e2af; font-weight: bold; border-radius: 6px; padding: 6px 10px;")
         self.btn_apply_safe_font.clicked.connect(self.apply_open_font_to_targets)
-        font_safe_row.addWidget(self.chk_safe_fonts)
+        font_safe_row.addWidget(self.lbl_font_policy, stretch=1)
         font_safe_row.addWidget(self.btn_apply_safe_font)
-        font_safe_row.addStretch()
         typo_layout.addLayout(font_safe_row)
-        self.font_var = QFontComboBox(); self.font_var.setStyleSheet("background-color: #313244; color: white; padding: 6px; border-radius: 5px;"); self.font_var.currentFontChanged.connect(self._on_style_change); self.font_var.currentFontChanged.connect(self._apply_font_license_filter); self.font_var.currentFontChanged.connect(self._update_font_preview)
+        self.font_var = NoScrollFontComboBox(); self.font_var.setStyleSheet("background-color: #313244; color: white; padding: 6px; border-radius: 5px;"); self.font_var.currentFontChanged.connect(self._on_font_change)
         typo_layout.addWidget(self.font_var)
         font_variant_row = QHBoxLayout()
         self.font_weight_combo = QComboBox()
@@ -1817,12 +1819,12 @@ class EditView(QWidget):
         self.lbl_font_license.setWordWrap(True)
         self.lbl_font_license.setStyleSheet("color: #a6adc8; font-size: 12px;")
         typo_layout.addWidget(self.lbl_font_license)
-        self.font_preview_input = QLineEdit("Text")
+        self.font_preview_input = QLineEdit("Aa 字体")
         self.font_preview_input.setPlaceholderText("输入要预览的字，比如 Text")
         self.font_preview_input.setStyleSheet("background-color: #11111b; color: #cdd6f4; border: 1px solid #313244; border-radius: 6px; padding: 6px 8px;")
         self.font_preview_input.textChanged.connect(self._update_font_preview)
         typo_layout.addWidget(self.font_preview_input)
-        self.font_preview_input.setVisible(False)
+        self.font_preview_input.setVisible(True)
         self.font_preview_label = QLabel("Text")
         self.font_preview_label.setMinimumHeight(88)
         self.font_preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -1830,28 +1832,38 @@ class EditView(QWidget):
         self.font_preview_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.font_preview_label.setStyleSheet("background-color: #11111b; border: 1px dashed #45475a; border-radius: 8px; color: #ffffff; padding: 12px;")
         typo_layout.addWidget(self.font_preview_label)
-        self.font_preview_label.setVisible(False)
-        self.layout_mode_combo = QComboBox(); self.layout_mode_combo.addItems(["标准排版", "智能图文排版", "混合自然排版", "大小对比排版", "三层模板排版", "前后大小叙事排版", "随机重点排版", "左右排开排版", "中轴排比排版"]); self.layout_mode_combo.setStyleSheet("background-color: #313244; padding: 5px; font-weight: bold;"); self.layout_mode_combo.currentTextChanged.connect(self._on_style_change); typo_layout.addWidget(self.layout_mode_combo)
-        self.layout_variant_combo = QComboBox(); self.layout_variant_combo.addItems(["自动变化", "小-大-小", "大-小-混排", "混排-大-小", "首字母变大叙事", "开头变大叙事", "尾部变大叙事", "中轴结尾分两边", "中轴 1-2-3 排"]); self.layout_variant_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.layout_variant_combo.currentTextChanged.connect(self._on_style_change); typo_layout.addWidget(self.layout_variant_combo)
-        self.box_layout_combo = QComboBox(); self.box_layout_combo.addItems(["自适应文字宽度", "固定窗口自动换行"]); self.box_layout_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.box_layout_combo.currentTextChanged.connect(self._on_style_change); typo_layout.addWidget(self.box_layout_combo)
-        self.max_lines_slider, self.max_lines_spin = create_slider_spinbox(typo_layout, "标准排版最大行数:", 1, 4, 2, self._on_style_change)
-        self.size_slider, self.size_spin = create_slider_spinbox(typo_layout, "字体大小:", 10, 300, 100, self._on_style_change)
-        self.spacing_slider, self.spacing_spin = create_slider_spinbox(typo_layout, "字距缩放:", -20, 100, 0, self._on_style_change)
-        self.word_spacing_slider, self.word_spacing_spin = create_slider_spinbox(typo_layout, "词距:", 0, 80, 0, self._on_style_change)
-        self.emphasis_slider, self.emphasis_spin = create_slider_spinbox(typo_layout, "大小对比 %:", 100, 220, 145, self._on_style_change)
-        self.align_combo = QComboBox(); self.align_combo.addItems(["居中对齐 (Center)", "左对齐 (Left)", "自由混合对齐 (Free Mix)", "左对齐为主混合 (Left Mix)", "右对齐 (Right)", "两端对齐 (Justify)"]); self.align_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.align_combo.currentTextChanged.connect(self._on_style_change); typo_layout.addWidget(self.align_combo)
-        self.lineh_slider, self.lineh_spin = create_slider_spinbox(typo_layout, "行距缩放:", 10, 300, 110, self._on_style_change)
-        self.transform_combo = QComboBox(); self.transform_combo.addItems(["首字母大写 (Capitalize)", "全部大写 (UPPERCASE)", "全部小写 (lowercase)", "正常 (Normal)"]); self.transform_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.transform_combo.currentTextChanged.connect(self._on_style_change); typo_layout.addWidget(self.transform_combo)
+        self.font_preview_label.setVisible(True)
+        page_typo_layout.addWidget(sec_typo); page_typo_layout.addStretch(); self.sub_pages.addWidget(page_typo)
+
+        page_layout = QWidget(); page_layout_layout = QVBoxLayout(page_layout); page_layout_layout.setSpacing(6); page_layout_layout.setContentsMargins(0, 0, 0, 0)
+        sec_layout, layout_layout = create_section_frame("字幕排版", "#89b4fa")
+        self.layout_mode_combo = QComboBox(); self.layout_mode_combo.addItems(["标准排版", "智能图文排版", "混合自然排版", "大小对比排版", "三层模板排版", "前后大小叙事排版", "随机重点排版", "左右排开排版", "中轴排比排版"]); self.layout_mode_combo.setStyleSheet("background-color: #313244; padding: 5px; font-weight: bold;"); self.layout_mode_combo.currentTextChanged.connect(self._on_style_change); layout_layout.addWidget(self.layout_mode_combo)
+        self.layout_variant_combo = QComboBox(); self.layout_variant_combo.addItems(["自动变化", "小-大-小", "大-小-混排", "混排-大-小", "首字母变大叙事", "开头变大叙事", "尾部变大叙事", "中轴结尾分两边", "中轴 1-2-3 排"]); self.layout_variant_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.layout_variant_combo.currentTextChanged.connect(self._on_style_change); layout_layout.addWidget(self.layout_variant_combo)
+        self.box_layout_combo = QComboBox(); self.box_layout_combo.addItems(["自适应文字宽度", "固定窗口自动换行"]); self.box_layout_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.box_layout_combo.currentTextChanged.connect(self._on_style_change); layout_layout.addWidget(self.box_layout_combo)
+        self.box_width_slider, self.box_width_spin = create_slider_spinbox(layout_layout, "显示区域宽% (0=自动):", 0, 92, 74, self._on_style_change, is_float=True)
+        self.box_height_slider, self.box_height_spin = create_slider_spinbox(layout_layout, "显示区域高% (0=不限):", 0, 50, 0, self._on_style_change, is_float=True)
+        self.max_lines_slider, self.max_lines_spin = create_slider_spinbox(layout_layout, "标准排版最大行数:", 1, 4, 2, self._on_style_change)
+        self.size_slider, self.size_spin = create_slider_spinbox(layout_layout, "字幕大小:", 10, 300, 100, self._on_style_change)
+        self.spacing_slider, self.spacing_spin = create_slider_spinbox(layout_layout, "字距缩放:", -20, 100, 0, self._on_style_change)
+        self.word_spacing_slider, self.word_spacing_spin = create_slider_spinbox(layout_layout, "词距:", 0, 80, 0, self._on_style_change)
+        self.emphasis_slider, self.emphasis_spin = create_slider_spinbox(layout_layout, "大小对比 %:", 100, 220, 145, self._on_style_change)
+        self.align_combo = QComboBox(); self.align_combo.addItems(["居中对齐 (Center)", "居中左对齐 (Center Left)", "左对齐 (Left)", "自由混合对齐 (Free Mix)", "左对齐为主混合 (Left Mix)", "右对齐 (Right)", "两端对齐 (Justify)"]); self.align_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.align_combo.currentTextChanged.connect(self._on_style_change); layout_layout.addWidget(self.align_combo)
+        self.lineh_slider, self.lineh_spin = create_slider_spinbox(layout_layout, "行距缩放:", 10, 300, 110, self._on_style_change)
+        self.transform_combo = QComboBox(); self.transform_combo.addItems(["首字母大写 (Capitalize)", "全部大写 (UPPERCASE)", "全部小写 (lowercase)", "正常 (Normal)"]); self.transform_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.transform_combo.currentTextChanged.connect(self._on_style_change); layout_layout.addWidget(self.transform_combo)
+        self.btn_reference_two_line_layout = QPushButton("参考视频：轻对比双行+按词")
+        self.btn_reference_two_line_layout.setStyleSheet("background-color: #f9e2af; color: #11111b; font-weight: bold; padding: 8px; border-radius: 6px;")
+        self.btn_reference_two_line_layout.clicked.connect(self.apply_reference_two_line_layout)
+        layout_layout.addWidget(self.btn_reference_two_line_layout)
         self.btn_reflow_standard = QPushButton("✨ 按显示区域重排全部字幕")
         self.btn_reflow_standard.setStyleSheet("background-color: #a6e3a1; color: #11111b; font-weight: bold; padding: 8px; border-radius: 6px;")
         self.btn_reflow_standard.clicked.connect(self.audit_and_reflow_subtitles)
-        typo_layout.addWidget(self.btn_reflow_standard)
-        page_typo_layout.addWidget(sec_typo); page_typo_layout.addStretch(); self.sub_pages.addWidget(page_typo)
+        layout_layout.addWidget(self.btn_reflow_standard)
+        page_layout_layout.addWidget(sec_layout); page_layout_layout.addStretch(); self.sub_pages.addWidget(page_layout)
 
         page_anim = QWidget(); page_anim_layout = QVBoxLayout(page_anim); page_anim_layout.setSpacing(6); page_anim_layout.setContentsMargins(0, 0, 0, 0)
         sec_anim, anim_layout = create_section_frame("🎬 动态特效 (Animation)", "#f9e2af")
         self.anim_combo = QComboBox(); self.anim_combo.addItems(["🎉 逐字弹跳 (Pop-in)", "☁️ 柔和淡入 (Fade)", "🌫️ 单词模糊渐入 (Blur Fade)", "▌单词遮罩右移键入", "➡️ 平滑遮罩右移", "⬆️ 电影级向上滚动 (Roll Up)", "💥 远处砸入 (Slam In)", "🔎 慢慢放大出字 (Grow In)", "🧲 词语散开入场 (Scatter In)", "🔤 字字分散入场 (Letter Scatter)", "🎥 朝镜头推进 (Camera Push)", "🧊 3D远近推进 (Depth Push)", "🕊️ 圣息慢显 (Holy Breath)", "🚫 无动画 (None)"]); self.anim_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.anim_combo.currentTextChanged.connect(self._on_style_change); anim_layout.addWidget(self.anim_combo)
-        self.font_motion_combo = QComboBox(); self.font_motion_combo.addItems(["字体动画: 无效果", "字体动画: 波浪感", "字体动画: 水波立体流动", "字体动画: 慢呼吸放大", "字体动画: 词语慢慢分散", "字体动画: 忽大忽小跳动"]); self.font_motion_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.font_motion_combo.currentTextChanged.connect(self._on_style_change); anim_layout.addWidget(self.font_motion_combo)
+        self.font_motion_combo = QComboBox(); self.font_motion_combo.addItems(["字体动画: 无效果", "字体动画: 打字机左移", "字体动画: 波浪感", "字体动画: 水波立体流动", "字体动画: 慢呼吸放大", "字体动画: 词语慢慢分散", "字体动画: 忽大忽小跳动"]); self.font_motion_combo.setStyleSheet("background-color: #313244; padding: 5px;"); self.font_motion_combo.currentTextChanged.connect(self._on_style_change); anim_layout.addWidget(self.font_motion_combo)
         self.hl_motion_combo = QComboBox(); self.hl_motion_combo.addItems(["当前词动画: 稳定贴合", "当前词动画: 放大贴合", "当前词动画: 放大并挤开两边"]); self.hl_motion_combo.setStyleSheet("background-color: #313244; padding: 5px; color: #a6e3a1;"); self.hl_motion_combo.currentTextChanged.connect(self._on_style_change); anim_layout.addWidget(self.hl_motion_combo)
         self.pop_speed_slider, self.pop_speed_spin = create_slider_spinbox(anim_layout, "动画速度(秒):", 0.05, 2.0, 0.18, self._on_style_change, is_float=True)
         self.pop_bounce_slider, self.pop_bounce_spin = create_slider_spinbox(anim_layout, "弹跳弹性 %:", 100, 220, 128, self._on_style_change)
@@ -1923,7 +1935,7 @@ class EditView(QWidget):
         vid_layout.addWidget(QLabel("🎞️ 画面设置", alignment=Qt.AlignmentFlag.AlignCenter)); self.v_scale_slider, self.v_scale_spin = create_slider_spinbox(vid_layout, "画面缩放 %:", 10, 300, 100, self._on_vid_prop_change); self.v_vol_slider, self.v_vol_spin = create_slider_spinbox(vid_layout, "原声音量 %:", 0, 100, 100, self._on_vid_prop_change)
         vid_layout.addStretch()
 
-        page_aud = QWidget(); aud_layout = QVBoxLayout(page_aud); aud_layout.addWidget(QLabel("🎵 配音音量设置", alignment=Qt.AlignmentFlag.AlignCenter)); self.a_vol_slider, self.a_vol_spin = create_slider_spinbox(aud_layout, "配音音量 %:", 0, 100, 100, self._on_aud_prop_change); aud_layout.addStretch()
+        page_aud = QWidget(); aud_layout = QVBoxLayout(page_aud); aud_layout.addWidget(QLabel("🎵 音频音量设置", alignment=Qt.AlignmentFlag.AlignCenter)); self.a_vol_slider, self.a_vol_spin = create_slider_spinbox(aud_layout, "配音音量 %:", 0, 100, 100, self._on_aud_prop_change); self.music_vol_slider, self.music_vol_spin = create_slider_spinbox(aud_layout, "配乐音量 %:", 0, 100, 35, self._on_music_prop_change); aud_layout.addStretch()
 
         page_signature = QWidget(); signature_layout = QVBoxLayout(page_signature); signature_layout.setSpacing(10)
         sec_signature, sig_layout = create_section_frame("✒️ 全局署名 (Signature)", "#f9e2af")
@@ -2649,11 +2661,84 @@ class EditView(QWidget):
             return
         self.status_lbl.setText("⚠️ 请先选中视频或字幕片段，再添加转场。")
 
+    def apply_reference_two_line_layout(self):
+        if not self._ensure_edit_mode("应用参考排版"):
+            return
+        if not self.state.get("subs_data"):
+            return QMessageBox.information(self, "没有字幕", "当前工程还没有字幕片段可以应用排版。")
+
+        if self.current_selected_idx == -1:
+            current_clip = self.state["subs_data"][0]
+            target_clips = self.state["subs_data"]
+        else:
+            current_clip = self.state["subs_data"][self.current_selected_idx]
+            scope = self.style_scope_combo.currentIndex()
+            if scope == 0:
+                target_clips = self.state["subs_data"]
+            elif scope == 1:
+                target_clips = [c for c in self.state["subs_data"] if c.get("track") == current_clip.get("track")]
+            else:
+                target_clips = [current_clip]
+
+        reference_layout = {
+            "size": 54,
+            "font": "TikTok Sans",
+            "font_weight": "800",
+            "font_style": "normal",
+            "layout_mode": "contrast",
+            "layout_variant": "auto",
+            "box_layout": "auto",
+            "box_width": 76.0,
+            "box_height": 0.0,
+            "max_lines": 2,
+            "line_height": 1.28,
+            "text_align": "center_left",
+            "text_transform": "none",
+            "letter_spacing": 0,
+            "word_spacing": 0,
+            "emphasis_scale": 118,
+            "contrast_small_scale": 0.92,
+            "anim_type": "none",
+            "pop_speed": 0.16,
+            "inactive_alpha": 0,
+            "font_motion": "typewriter_left",
+            "hl_motion": "stable",
+            "use_hl": False,
+        }
+        for clip in target_clips:
+            clip["pos_x"] = 0.0
+            clip["pos_y"] = -23.0
+            clip.setdefault("style", {}).update(reference_layout)
+
+        if self.style_scope_combo.currentIndex() == 0:
+            self.state["default_pos_x"] = 0.0
+            self.state["default_pos_y"] = -23.0
+            self.default_style.update(reference_layout)
+
+        smart_chunk_mode = "智能听译 (4-6词，适配双行按词)"
+        self.state["chunk_mode"] = smart_chunk_mode
+        if hasattr(self, "chunk_mode"):
+            self.chunk_mode.blockSignals(True)
+            if self.chunk_mode.findText(smart_chunk_mode) < 0:
+                self.chunk_mode.addItem(smart_chunk_mode)
+            self.chunk_mode.setCurrentText(smart_chunk_mode)
+            self.chunk_mode.blockSignals(False)
+
+        if self.current_selected_idx != -1:
+            self.sync_inspector_to_clip()
+        self._switch_sub_page(2)
+        self.update_floating_subtitle()
+        self.auto_save_cache()
+        self.push_history()
+        self.status_lbl.setText("✅ 已应用参考视频双行排版：TikTok Sans、轻微大小对比、4-6词听译、按词打字机左移。")
+
     def delete_context_selection(self):
         if not self._ensure_edit_mode("删除片段"):
             return
         if self.selected_track == "design" and self.selected_design_layer_id:
             self.delete_selected_design_layer()
+        elif self.selected_track == "music" and self.state.get("music_path"):
+            self.remove_music()
         elif self.current_selected_idx != -1:
             self.delete_current_clip()
         elif self.state.get("video_clips"):
@@ -2683,7 +2768,7 @@ class EditView(QWidget):
             if self.current_selected_idx != -1:
                 self.switch_inspector("sub")
             self.tabs.setCurrentIndex(1)
-            self._switch_sub_page(0 if target == "position" else 2)
+            self._switch_sub_page(0 if target == "position" else 3)
         elif target == "audio":
             self.switch_inspector("audio")
         elif target == "media":
@@ -3898,7 +3983,10 @@ body {{
         reply = QMessageBox.warning(self, '⚠️ 清空确认', '确定要清空所有轨道数据吗？', QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
             self.player.stop(); self.audio_player.stop()
+            if hasattr(self, "music_player"):
+                self.music_player.stop()
             self.state["video_clips"] = []; self.state["audio_path"] = ""; self.state["music_path"] = ""; self.state["subs_data"] = []; self.state["duration"] = 10.0
+            self.state.pop("music_dur", None); self.state.pop("music_match_duration", None); self.state.pop("music_loop", None)
             self.state["signature"] = default_signature_config(self.default_style)
             self.current_selected_idx = -1; self.current_v_idx = 0; self.current_play_time = 0.0
             self.v_wave_pixmap = None; self.a_wave_pixmap = None; self.video_thumbs = []; self.last_video_image = None
@@ -3989,6 +4077,10 @@ body {{
             a_start = a_trim[0] if len(a_trim) > 0 else 0.0
             a_end = a_trim[1] if len(a_trim) > 1 else a_start
             return f"音频 A2 · {name} · {self._format_monitor_time(a_start)} - {self._format_monitor_time(a_end)}"
+        if self.selected_track == "music" and self.state.get("music_path"):
+            name = os.path.basename(self.state.get("music_path", "")) or "配乐"
+            end = float(self.state.get("music_match_duration", 0.0) or self.state.get("music_dur", 0.0) or self.state.get("duration", 0.0) or 0.0)
+            return f"配乐 M1 · {name} · {self._format_monitor_time(0.0)} - {self._format_monitor_time(end)}"
         if self.selected_track == "design" and self.selected_design_layer_id:
             layer = self._selected_design_layer()
             if layer:
@@ -4054,6 +4146,135 @@ body {{
     def reset_preview_view_from_shortcut(self):
         if self._shortcut_editing_guard():
             self.reset_preview_view()
+
+    def toggle_preview_fullscreen_from_shortcut(self):
+        if self._shortcut_editing_guard():
+            self.toggle_preview_fullscreen()
+
+    def toggle_preview_fullscreen(self):
+        if getattr(self, "preview_fullscreen_dialog", None):
+            self.exit_preview_fullscreen()
+        else:
+            self.enter_preview_fullscreen()
+
+    def _sync_preview_web_state(self):
+        if not hasattr(self, "browser"):
+            return
+        self.last_render_hash = None
+        self.active_subs_cache = set()
+        try:
+            self.browser.page().runJavaScript(
+                f"if(typeof setResolution === 'function') setResolution({self.proj_width}, {self.proj_height});"
+                "if(typeof setEditMode === 'function') setEditMode(true);"
+            )
+            self._sync_preview_overlay_transform(sync_js=True, update_status=True)
+            self.update_floating_subtitle()
+        except Exception:
+            pass
+
+    def _on_preview_web_reloaded_after_reparent(self, *_):
+        if hasattr(self, "browser"):
+            try:
+                self.browser.loadFinished.disconnect(self._on_preview_web_reloaded_after_reparent)
+            except Exception:
+                pass
+            self.browser.show()
+            self.browser.raise_()
+        QTimer.singleShot(0, self._sync_preview_web_state)
+        QTimer.singleShot(120, self._sync_preview_web_state)
+
+    def _refresh_preview_surface_after_reparent(self, reload_web=False):
+        if hasattr(self, "preview_workspace"):
+            self.preview_workspace.update_stage_geometry()
+        if hasattr(self, "video_label"):
+            self.video_label.show()
+        if hasattr(self, "browser"):
+            self.browser.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+            self.browser.page().setBackgroundColor(Qt.GlobalColor.transparent)
+            self.browser.show()
+            self.browser.raise_()
+        self.redraw_video_preview()
+        if reload_web and hasattr(self, "browser"):
+            try:
+                self.browser.loadFinished.disconnect(self._on_preview_web_reloaded_after_reparent)
+            except Exception:
+                pass
+            self.browser.loadFinished.connect(self._on_preview_web_reloaded_after_reparent)
+            self.init_web_engine_once()
+        else:
+            self._sync_preview_web_state()
+        QTimer.singleShot(80, self.redraw_video_preview)
+
+    def enter_preview_fullscreen(self):
+        if not hasattr(self, "preview_workspace") or getattr(self, "preview_fullscreen_dialog", None):
+            return
+        origin_parent = self.preview_workspace.parentWidget()
+        origin_layout = origin_parent.layout() if origin_parent is not None else None
+        origin_index = origin_layout.indexOf(self.preview_workspace) if origin_layout is not None else -1
+        self._preview_fullscreen_origin = {
+            "parent": origin_parent,
+            "layout": origin_layout,
+            "index": origin_index,
+        }
+        if origin_layout is not None:
+            origin_layout.removeWidget(self.preview_workspace)
+
+        dlg = QDialog(self.window())
+        dlg.setWindowTitle("预览全屏 - Esc / Ctrl+F 退出")
+        dlg.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
+        dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
+        dlg.setStyleSheet("background-color:#000000;")
+        layout = QVBoxLayout(dlg)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(self.preview_workspace)
+        esc_shortcut = QShortcut(QKeySequence("Esc"), dlg)
+        esc_shortcut.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        esc_shortcut.activated.connect(self.exit_preview_fullscreen)
+        ctrl_f_shortcut = QShortcut(QKeySequence("Ctrl+F"), dlg)
+        ctrl_f_shortcut.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        ctrl_f_shortcut.activated.connect(self.exit_preview_fullscreen)
+        dlg._preview_shortcuts = (esc_shortcut, ctrl_f_shortcut)
+        dlg.finished.connect(lambda *_: self.exit_preview_fullscreen())
+        self.preview_fullscreen_dialog = dlg
+        if hasattr(self, "btn_preview_fullscreen"):
+            self.btn_preview_fullscreen.setText("↙")
+        dlg.showFullScreen()
+        QTimer.singleShot(0, lambda: self._refresh_preview_surface_after_reparent(reload_web=True))
+        QTimer.singleShot(220, self._refresh_preview_surface_after_reparent)
+
+    def exit_preview_fullscreen(self):
+        dlg = getattr(self, "preview_fullscreen_dialog", None)
+        origin = getattr(self, "_preview_fullscreen_origin", {}) or {}
+        if not dlg and not origin:
+            return
+        if getattr(self, "_restoring_preview_fullscreen", False):
+            return
+        self._restoring_preview_fullscreen = True
+        try:
+            if dlg is not None:
+                dlg.layout().removeWidget(self.preview_workspace)
+            origin_parent = origin.get("parent")
+            origin_layout = origin.get("layout")
+            origin_index = int(origin.get("index", -1))
+            if origin_parent is not None:
+                self.preview_workspace.setParent(origin_parent)
+            if origin_layout is not None:
+                if origin_index >= 0 and hasattr(origin_layout, "insertWidget"):
+                    origin_layout.insertWidget(origin_index, self.preview_workspace, 1)
+                else:
+                    origin_layout.addWidget(self.preview_workspace)
+            self.preview_workspace.show()
+            self.preview_fullscreen_dialog = None
+            self._preview_fullscreen_origin = {}
+            if hasattr(self, "btn_preview_fullscreen"):
+                self.btn_preview_fullscreen.setText("⛶")
+            if dlg is not None and dlg.isVisible():
+                dlg.close()
+            QTimer.singleShot(0, lambda: self._refresh_preview_surface_after_reparent(reload_web=True))
+            QTimer.singleShot(220, self._refresh_preview_surface_after_reparent)
+        finally:
+            self._restoring_preview_fullscreen = False
 
     def adjust_timeline_zoom(self, factor):
         self.zoom_factor = max(10.0, min(300.0, self.zoom_factor * float(factor)))
@@ -4313,23 +4534,76 @@ body {{
         self._apply_font_license_filter()
         self._update_font_preview()
 
+    def _selected_font_family(self):
+        if not hasattr(self, "font_var"):
+            return self.default_style.get("font", "Noto Sans SC")
+        text = self.font_var.currentText().strip()
+        if text:
+            return text
+        return self.font_var.currentFont().family()
+
+    def _on_font_change(self, font):
+        family = ""
+        try:
+            family = font.family().strip()
+        except Exception:
+            family = ""
+        family = self._usable_font_name(family or self._selected_font_family())
+        if not family:
+            return
+
+        if self.state.get("subs_data"):
+            if self.current_selected_idx == -1:
+                target_clips = self.state["subs_data"]
+            else:
+                current_clip = self.state["subs_data"][self.current_selected_idx]
+                scope = self.style_scope_combo.currentIndex()
+                if scope == 0:
+                    target_clips = self.state["subs_data"]
+                elif scope == 1:
+                    target_clips = [c for c in self.state["subs_data"] if c.get("track") == current_clip.get("track")]
+                else:
+                    target_clips = [current_clip]
+
+            for clip in target_clips:
+                clip.setdefault("style", {})["font"] = family
+
+        self.default_style["font"] = family
+        self._apply_font_license_filter(font)
+        self._update_font_preview()
+        self.update_floating_subtitle()
+        self.auto_save_cache()
+
+    def _font_is_blocked_for_design(self, font_name):
+        return False
+
+    def _usable_font_name(self, font_name):
+        name = str(font_name or "").strip()
+        if name:
+            return name
+        return self._preferred_safe_font()
+
     def _apply_font_license_filter(self, *args):
         if not hasattr(self, "font_var"):
             return
+        if getattr(self, "_font_filtering", False):
+            return
+        self._font_filtering = True
         view = self.font_var.view()
-        safe_keys = safe_font_keys()
         visible = 0
-        current_name = self.font_var.currentFont().family()
-        current_safe = is_safe_font(current_name)
-        safe_only = bool(getattr(self, "chk_safe_fonts", None) and self.chk_safe_fonts.isChecked())
+        signal_font = args[0] if args and isinstance(args[0], QFont) else None
+        current_name = signal_font.family().strip() if signal_font and signal_font.family().strip() else self._selected_font_family()
+        current_name_key = current_name.casefold()
         current_record = font_record_for(current_name)
         category_text = self.font_category_combo.currentText() if hasattr(self, "font_category_combo") else ""
 
         def category_allowed(record):
             status = record.get("status")
             style_class = record.get("style_class", "")
-            if "商用安全" in category_text:
-                return status in (STATUS_OPEN, STATUS_APPROVED)
+            if "开源打包" in category_text:
+                return status == STATUS_OPEN
+            if "个人" in category_text or "不可商用" in category_text:
+                return status in (STATUS_NONCOMMERCIAL, STATUS_REVIEW, STATUS_SYSTEM, STATUS_APPROVED)
             if "系统" in category_text or "待复核" in category_text:
                 return status in (STATUS_SYSTEM, STATUS_REVIEW)
             if "无衬线" in category_text:
@@ -4344,7 +4618,10 @@ body {{
 
         for row in range(self.font_var.count()):
             name = self.font_var.itemText(row).strip()
-            allowed = ((not safe_only) or (name.casefold() in safe_keys)) and category_allowed(font_record_for(name))
+            record = font_record_for(name)
+            allowed = category_allowed(record)
+            if name.casefold() == current_name_key:
+                allowed = True
             try:
                 view.setRowHidden(row, not allowed)
             except Exception:
@@ -4353,19 +4630,34 @@ body {{
                 visible += 1
 
         if hasattr(self, "lbl_font_license"):
-            if safe_only:
-                status = "安全" if current_safe else "当前字体需复核"
-                self.lbl_font_license.setText(f"字体筛选: 仅显示开源/已确认字体。可见 {visible} 个；当前 {current_name}：{status}。")
-                self.lbl_font_license.setStyleSheet("color: #a6e3a1; font-size: 12px;" if current_safe else "color: #f9e2af; font-size: 12px;")
+            status = current_record.get("status")
+            if status == STATUS_OPEN:
+                label = "开源/已确认，可随打包字体清单使用"
+                color = "#a6e3a1"
+            elif status in (STATUS_NONCOMMERCIAL, STATUS_APPROVED):
+                label = "仅个人使用/不可商用，不随安装包或模板分发"
+                color = "#f38ba8"
+            elif status == STATUS_SYSTEM:
+                label = "系统字体/需确认系统授权，其他人需本机自备"
+                color = "#f9e2af"
             else:
-                self.lbl_font_license.setText(f"字体筛选: 显示全部字体。当前 {current_name}。")
-                self.lbl_font_license.setStyleSheet("color: #a6adc8; font-size: 12px;")
-
+                label = "未登记字体，按个人预览处理；商用前需补授权凭据"
+                color = "#f9e2af"
+            source = current_record.get("source") or ""
+            license_name = current_record.get("license") or ""
+            proof = current_record.get("proof") or current_record.get("source_url") or current_record.get("license_evidence_url") or current_record.get("license_file") or ""
+            detail = f"字体: {current_name}；状态: {label}；可见 {visible} 个"
+            if source:
+                detail += f"；来源: {source}"
+            if license_name:
+                detail += f"；协议: {license_name}"
+            self.lbl_font_license.setText(detail)
+            self.lbl_font_license.setStyleSheet(f"color: {color}; font-size: 12px;")
             proof = current_record.get("proof") or current_record.get("source_url") or current_record.get("license_evidence_url") or ""
+            if not proof:
+                proof = current_record.get("license_file") or current_record.get("bundled_file") or current_record.get("notes") or ""
             self.lbl_font_license.setToolTip(proof)
-            if current_record.get("status") == STATUS_NONCOMMERCIAL:
-                self.lbl_font_license.setText(self.lbl_font_license.text() + "\nNON-COMMERCIAL / DO NOT USE FOR COMMERCIAL EXPORTS WITHOUT LICENSE.")
-                self.lbl_font_license.setStyleSheet("color: #f38ba8; font-size: 12px;")
+        self._font_filtering = False
 
     def _preferred_safe_font(self):
         preferred = ["Noto Sans SC", "Source Han Sans SC", "Noto Sans CJK SC", "Noto Sans", "Inter", "Roboto", "Open Sans"]
@@ -4430,7 +4722,7 @@ body {{
         preview_text = "Text"
         if hasattr(self, "font_preview_input"):
             preview_text = self.font_preview_input.text().strip() or "Text"
-        font_family = self.font_var.currentFont().family() if hasattr(self, "font_var") else "Segoe UI"
+        font_family = self._selected_font_family() if hasattr(self, "font_var") else "Segoe UI"
         font_size = self.size_spin.value() if hasattr(self, "size_spin") else 72
         line_height_pct = self.lineh_spin.value() if hasattr(self, "lineh_spin") else 110
         letter_spacing = self.spacing_spin.value() if hasattr(self, "spacing_spin") else 0
@@ -4438,10 +4730,17 @@ body {{
         font_weight = self.font_weight_combo.currentData() if hasattr(self, "font_weight_combo") else "700"
         font_style = "italic" if hasattr(self, "chk_font_italic") and self.chk_font_italic.isChecked() else "normal"
         self.font_preview_label.setText(preview_text)
+        preview_font = QFont(font_family)
+        preview_font.setPointSize(max(10, min(int(font_size * 0.72), 54)))
+        try:
+            preview_font.setWeight(QFont.Weight(int(font_weight)))
+        except Exception:
+            preview_font.setWeight(QFont.Weight.Bold)
+        preview_font.setItalic(font_style == "italic")
+        self.font_preview_label.setFont(preview_font)
         self.font_preview_label.setStyleSheet(
             f"background-color: #11111b; border: 1px dashed #45475a; border-radius: 8px; color: #ffffff;"
-            f"padding: 12px; font-family: '{font_family}'; font-size: {max(16, min(font_size, 72))}px;"
-            f"font-weight: {font_weight}; font-style: {font_style}; letter-spacing: {letter_spacing}px; word-spacing: {word_spacing}px; line-height: {max(90, min(line_height_pct, 180))}%;"
+            f"padding: 12px; letter-spacing: {letter_spacing}px; word-spacing: {word_spacing}px; line-height: {max(90, min(line_height_pct, 180))}%;"
         )
 
     def sync_inspector_to_clip(self):
@@ -4523,25 +4822,38 @@ body {{
         
         t_map = {"uppercase": "全部大写 (UPPERCASE)", "lowercase": "全部小写 (lowercase)", "capitalize": "首字母大写 (Capitalize)", "none": "正常 (Normal)"}
         self.transform_combo.setCurrentText(t_map.get(st.get("text_transform", "capitalize")))
-        a_map = {"center": "居中对齐 (Center)", "left": "左对齐 (Left)", "free_mix": "自由混合对齐 (Free Mix)", "left_mix": "左对齐为主混合 (Left Mix)", "right": "右对齐 (Right)", "justify": "两端对齐 (Justify)"}
+        a_map = {"center": "居中对齐 (Center)", "center_left": "居中左对齐 (Center Left)", "left": "左对齐 (Left)", "free_mix": "自由混合对齐 (Free Mix)", "left_mix": "左对齐为主混合 (Left Mix)", "right": "右对齐 (Right)", "justify": "两端对齐 (Justify)"}
         self.align_combo.setCurrentText(a_map.get(st.get("text_align", "center")))
         lm_map = {"standard": "标准排版", "smart_caption": "智能图文排版", "mixed_reel": "混合自然排版", "contrast": "大小对比排版", "triple": "三层模板排版", "reel_stack": "前后大小叙事排版", "random_focus": "随机重点排版", "side_steps": "左右排开排版", "axis_stack": "中轴排比排版"}
         self.layout_mode_combo.setCurrentText(lm_map.get(st.get("layout_mode", "standard"), "标准排版"))
         lv_map = {"auto": "自动变化", "small-big-small": "小-大-小", "big-small-mix": "大-小-混排", "mix-big-small": "混排-大-小", "head-letter-large": "首字母变大叙事", "head-large": "开头变大叙事", "head-uppercase": "开头变大叙事", "tail-large": "尾部变大叙事", "tail-uppercase": "尾部变大叙事", "axis-split-tail": "中轴结尾分两边", "axis-123": "中轴 1-2-3 排"}
         self.layout_variant_combo.setCurrentText(lv_map.get(st.get("layout_variant", "auto"), "自动变化"))
         self.box_layout_combo.setCurrentText("固定窗口自动换行" if st.get("box_layout", "auto") == "fixed" else "自适应文字宽度")
+        anim_type_value = st.get("anim_type", "pop")
+        font_motion_value = st.get("font_motion", "none")
+        if anim_type_value == "typewriter":
+            anim_type_value = "none"
+            if font_motion_value in ("none", "", None):
+                font_motion_value = "typewriter_left"
         anim_map = {"pop": "🎉 逐字弹跳 (Pop-in)", "fade": "☁️ 柔和淡入 (Fade)", "blur_fade": "🌫️ 单词模糊渐入 (Blur Fade)", "word_wipe": "▌单词遮罩右移键入", "wipe_right": "➡️ 平滑遮罩右移", "roll_up": "⬆️ 电影级向上滚动 (Roll Up)", "slam_in": "💥 远处砸入 (Slam In)", "grow_in": "🔎 慢慢放大出字 (Grow In)", "scatter_in": "🧲 词语散开入场 (Scatter In)", "letter_scatter_in": "🔤 字字分散入场 (Letter Scatter)", "camera_push": "🎥 朝镜头推进 (Camera Push)", "depth_push": "🧊 3D远近推进 (Depth Push)", "holy_breath": "🕊️ 圣息慢显 (Holy Breath)", "none": "🚫 无动画 (None)"}
-        self.anim_combo.setCurrentText(anim_map.get(st.get("anim_type", "pop"), anim_map["pop"]))
-        font_motion_map = {"none": "字体动画: 无效果", "wave": "字体动画: 波浪感", "ripple3d": "字体动画: 水波立体流动", "breathe": "字体动画: 慢呼吸放大", "drift": "字体动画: 词语慢慢分散", "pulse": "字体动画: 忽大忽小跳动"}
-        self.font_motion_combo.setCurrentText(font_motion_map.get(st.get("font_motion", "none"), font_motion_map["none"]))
+        self.anim_combo.setCurrentText(anim_map.get(anim_type_value, anim_map["pop"]))
+        font_motion_map = {"none": "字体动画: 无效果", "typewriter_left": "字体动画: 打字机左移", "wave": "字体动画: 波浪感", "ripple3d": "字体动画: 水波立体流动", "breathe": "字体动画: 慢呼吸放大", "drift": "字体动画: 词语慢慢分散", "pulse": "字体动画: 忽大忽小跳动"}
+        self.font_motion_combo.setCurrentText(font_motion_map.get(font_motion_value, font_motion_map["none"]))
         texture_map = {"none": "字体质感: 无", "grain": "字体质感: Grain 轻微颗粒", "noise": "字体质感: Noise 噪点", "roughen": "字体质感: Roughen 粗糙边", "distressed": "字体质感: Distress texture 破碎磨损", "stacked_distress": "字体质感: 叠加 Grain+Noise+Roughen+Distress"}
         self.text_texture_combo.setCurrentText(texture_map.get(st.get("text_texture", "none"), texture_map["none"]))
         self.hl_motion_combo.setCurrentIndex({"stable": 0, "pop": 1, "push": 2}.get(st.get("hl_motion", "stable"), 0))
         
         try:
-            self.font_var.setCurrentFont(QFont(st.get("font", self.default_style.get("font", "Segoe UI"))))
+            font_name = self._usable_font_name(st.get("font", self.default_style.get("font", "Segoe UI")))
+            if font_name != st.get("font"):
+                st["font"] = font_name
+                if "style" in clip:
+                    clip["style"]["font"] = font_name
+            self.font_var.blockSignals(True)
+            self.font_var.setCurrentFont(QFont(font_name))
+            self.font_var.blockSignals(False)
         except Exception:
-            pass
+            self.font_var.blockSignals(False)
 
         bm = st.get("bg_mode", "none")
         if bm == "none":
@@ -4596,7 +4908,7 @@ body {{
             elif target_type == "hl_bg_col": c["style"]["hl_bg_color"] = hex_col
             elif target_type == "params":
                 c["pos_x"] = float(self.pos_x_spin.value()); c["pos_y"] = float(self.pos_y_spin.value())
-                c["style"]["rotation"] = self.rot_slider.value(); c["style"]["font"] = self.font_var.currentFont().family()
+                c["style"]["rotation"] = self.rot_slider.value(); c["style"]["font"] = self._usable_font_name(self._selected_font_family())
                 c["style"]["font_weight"] = self.font_weight_combo.currentData() if hasattr(self, "font_weight_combo") else "700"
                 c["style"]["font_style"] = "italic" if hasattr(self, "chk_font_italic") and self.chk_font_italic.isChecked() else "normal"
                 c["style"]["size"] = self.size_slider.value(); c["style"]["letter_spacing"] = self.spacing_slider.value(); c["style"]["word_spacing"] = self.word_spacing_slider.value()
@@ -4666,7 +4978,9 @@ body {{
                 tc = self.transform_combo.currentText()
                 c["style"]["text_transform"] = "uppercase" if "UPPERCASE" in tc else "lowercase" if "lowercase" in tc else "capitalize" if "Capitalize" in tc else "none"
                 ac = self.align_combo.currentText()
-                if "左对齐为主" in ac or "Left Mix" in ac:
+                if "居中左对齐" in ac or "Center Left" in ac:
+                    c["style"]["text_align"] = "center_left"
+                elif "左对齐为主" in ac or "Left Mix" in ac:
                     c["style"]["text_align"] = "left_mix"
                 elif "自由混合" in ac or "Free Mix" in ac:
                     c["style"]["text_align"] = "free_mix"
@@ -4708,7 +5022,9 @@ body {{
                 else:
                     c["style"]["anim_type"] = "none"
                 font_motion_txt = self.font_motion_combo.currentText()
-                if "波浪" in font_motion_txt:
+                if "打字机" in font_motion_txt:
+                    c["style"]["font_motion"] = "typewriter_left"
+                elif "波浪" in font_motion_txt:
                     c["style"]["font_motion"] = "wave"
                 elif "水波" in font_motion_txt or "立体流动" in font_motion_txt:
                     c["style"]["font_motion"] = "ripple3d"
@@ -4754,10 +5070,8 @@ body {{
             if "style" in current_clip and k in current_clip["style"]: 
                 self.default_style[k] = current_clip["style"][k]
 
-        self.default_style["font"] = self.font_var.currentFont().family() if hasattr(self, "font_var") else self.default_style.get("font", "Segoe UI")
+        self.default_style["font"] = self._usable_font_name(self._selected_font_family()) if hasattr(self, "font_var") else self.default_style.get("font", "Segoe UI")
         self.btn_color_hl.setEnabled(self.chk_use_hl.isChecked())
-        if self.current_selected_idx != -1:
-            self.sync_inspector_to_clip()
         self.update_floating_subtitle(); self.auto_save_cache()
 
     def _pick_color(self, target):
@@ -4802,6 +5116,11 @@ body {{
         
     def _on_vid_prop_change(self): self.state["v_scale"] = self.v_scale_slider.value(); self.state["v_volume"] = self.v_vol_slider.value(); self.audio_output.setVolume(self.state["v_volume"] / 100.0); self.sync_player_to_time(self.current_play_time); self.auto_save_cache()
     def _on_aud_prop_change(self): self.state["a_volume"] = self.a_vol_slider.value(); self.audio_track_output.setVolume(self.state["a_volume"] / 100.0); self.auto_save_cache()
+    def _on_music_prop_change(self):
+        self.state["music_volume"] = self.music_vol_slider.value()
+        if hasattr(self, "music_output"):
+            self.music_output.setVolume(self.state["music_volume"] / 100.0)
+        self.auto_save_cache()
 
     def _signature_state(self):
         sig = normalize_signature_config(self.state.get("signature"), self.default_style)
@@ -5131,8 +5450,18 @@ body {{
         file_path = self.cloud_import_media_if_needed(file_path)
         self.state["music_path"] = file_path
         self.state.setdefault("music_volume", 35)
+        music_dur = get_exact_duration(file_path)
+        if music_dur and music_dur > 0:
+            self.state["music_dur"] = float(music_dur)
         if hasattr(self, "btn_music"):
             self.btn_music.setText("✅ " + os.path.basename(file_path)[:15])
+        if hasattr(self, "music_player"):
+            self.music_player.setSource(QUrl.fromLocalFile(file_path))
+            self.music_player.setLoops(QMediaPlayer.Loops.Infinite)
+        if hasattr(self, "music_output"):
+            self.music_output.setVolume(float(self.state.get("music_volume", 35) or 35) / 100.0)
+        self.match_music_to_audio(show_message=False)
+        self.update_timeline_size()
         self.auto_save_cache()
         self._update_workspace_status()
         self.status_lbl.setText("🎼 配乐已加入；导出时会自动循环/裁切匹配工程时长。")
@@ -5142,7 +5471,6 @@ body {{
         file_path, _ = QFileDialog.getOpenFileName(self, "选择配乐", "", "Audio Files (*.mp3 *.wav *.m4a *.aac *.flac *.ogg)")
         if file_path:
             self.set_music_path_from_file(file_path)
-            self.match_music_to_audio(show_message=False)
         return
             
     def load_video(self):
@@ -5185,8 +5513,16 @@ body {{
     def remove_music(self):
         if self.state.get("music_path"):
             self.state["music_path"] = ""
+            self.state.pop("music_dur", None)
+            self.state.pop("music_match_duration", None)
+            self.state.pop("music_loop", None)
             if hasattr(self, "btn_music"):
                 self.btn_music.setText("🎼 导入配乐 (可选)")
+            if hasattr(self, "music_player"):
+                self.music_player.stop()
+                self.music_player.setSource(QUrl())
+            self._recalc_duration()
+            self.update_timeline_size()
             self.auto_save_cache()
             self._update_workspace_status()
             self.status_lbl.setText("配乐已清除")
@@ -5195,15 +5531,25 @@ body {{
         music_path = self.state.get("music_path", "")
         if not music_path:
             return QMessageBox.warning(self, "提示", "请先导入配乐。")
-        target_dur = float(self.state.get("duration", 0.0) or 0.0)
+        target_dur = 0.0
         a_path = self.state.get("audio_path", "")
         if a_path:
-            target_dur = max(target_dur, get_exact_duration(a_path) or 0.0)
+            a_trim = self.state.get("a_trim") or []
+            if len(a_trim) >= 2:
+                try:
+                    target_dur = max(0.0, float(a_trim[1]) - float(a_trim[0]))
+                except Exception:
+                    target_dur = 0.0
+            if target_dur <= 0:
+                target_dur = get_exact_duration(a_path) or 0.0
         if target_dur <= 0:
             self._recalc_duration()
             target_dur = float(self.state.get("duration", 0.0) or 0.0)
+        if target_dur <= 1.0:
+            target_dur = float(self.state.get("music_dur", 0.0) or 0.0) or get_exact_duration(music_path) or target_dur
         self.state["music_match_duration"] = max(1.0, target_dur)
         self.state["music_loop"] = True
+        self.update_timeline_size()
         self.auto_save_cache()
         self.status_lbl.setText(f"配乐已匹配到 {self.state['music_match_duration']:.1f}s，导出会自动循环/裁切。")
         if show_message:
@@ -5225,6 +5571,15 @@ body {{
 
         subs = self.state.get("subs_data", []) or []
         durations.extend(float(s.get("end", 0.0) or 0.0) for s in subs)
+
+        if self.state.get("music_path"):
+            music_target = float(self.state.get("music_match_duration", 0.0) or 0.0)
+            if music_target <= 0:
+                music_target = float(self.state.get("music_dur", 0.0) or 0.0)
+            if music_target <= 0:
+                music_target = get_exact_duration(self.state.get("music_path")) or 0.0
+            if music_target > 0:
+                durations.append(music_target)
 
         content_dur = max(durations) if durations else 0.0
         render_dur = content_dur + render_tail_padding_seconds() if content_dur > 0 else 1.0
@@ -5265,10 +5620,13 @@ body {{
             self._play_clock_ref = time.monotonic()
             self._play_time_ref = self.current_play_time
             self._sync_video_playback_to_time(self.current_play_time, force_seek=True)
+            self._sync_music_playback_to_time(self.current_play_time, force_seek=True)
             self.player.play(); self.audio_player.play() if self.state.get("audio_path") else None
+            self.music_player.play() if self._has_music_track() else None
             self.play_timer = QTimer(self); self.play_timer.timeout.connect(self.play_tick); self.play_timer.start(30)
         else: 
             self.player.pause(); self.audio_player.pause() if self.state.get("audio_path") else None
+            self.music_player.pause() if self._has_music_track() else None
             if hasattr(self, 'play_timer'): self.play_timer.stop()
             
     def _on_video_media_status_changed(self, status):
@@ -5286,6 +5644,16 @@ body {{
                 self.player.play()
                 if self.state.get("audio_path"):
                     self.audio_player.play()
+                if self._has_music_track():
+                    self.music_player.play()
+            else:
+                self._stop_playback_at_end()
+
+    def _on_music_media_status_changed(self, status):
+        if status == QMediaPlayer.MediaStatus.EndOfMedia and self.is_playing:
+            if self._playback_loop_enabled():
+                self._sync_music_playback_to_time(self.current_play_time, force_seek=True)
+                self.music_player.play()
             else:
                 self._stop_playback_at_end()
 
@@ -5299,6 +5667,8 @@ body {{
         self.player.pause()
         if self.state.get("audio_path"):
             self.audio_player.pause()
+        if self._has_music_track():
+            self.music_player.pause()
         if hasattr(self, "play_timer"):
             self.play_timer.stop()
         self._update_time_label()
@@ -5348,6 +5718,46 @@ body {{
             self.player.play()
         self._playback_v_idx = idx
 
+    def _has_music_track(self):
+        path = self.state.get("music_path", "")
+        return bool(path and os.path.exists(path) and hasattr(self, "music_player"))
+
+    def _music_source_duration(self):
+        path = self.state.get("music_path", "")
+        dur = float(self.state.get("music_dur", 0.0) or 0.0)
+        if dur <= 0 and path and os.path.exists(path):
+            dur = float(get_exact_duration(path) or 0.0)
+            if dur > 0:
+                self.state["music_dur"] = dur
+        return max(0.0, dur)
+
+    def _music_local_time(self, time_sec):
+        time_sec = max(0.0, float(time_sec or 0.0))
+        dur = self._music_source_duration()
+        if dur <= 0:
+            return time_sec
+        if bool(self.state.get("music_loop", True)):
+            return time_sec % dur
+        return min(time_sec, dur)
+
+    def _sync_music_playback_to_time(self, time_sec, force_seek=False):
+        if not self._has_music_track():
+            return
+        path = self.state.get("music_path", "")
+        current_path = self.music_player.source().toLocalFile()
+        source_changed = current_path != path
+        if source_changed:
+            self.music_player.setSource(QUrl.fromLocalFile(path))
+        self.music_player.setLoops(QMediaPlayer.Loops.Infinite if bool(self.state.get("music_loop", True)) else 1)
+        if hasattr(self, "music_output"):
+            self.music_output.setVolume(float(self.state.get("music_volume", 35) or 35) / 100.0)
+        local_time = self._music_local_time(time_sec)
+        player_time = self.music_player.position() / 1000.0
+        if force_seek or source_changed or abs(player_time - local_time) > 0.28:
+            self.music_player.setPosition(int(local_time * 1000))
+        if self.is_playing and source_changed:
+            self.music_player.play()
+
     def play_tick(self):
         if self.timeline_widget.is_scrubbing: return 
         if self.state.get("audio_path"):
@@ -5366,11 +5776,16 @@ body {{
                     self.audio_player.setPosition(0)
                     if self.is_playing:
                         self.audio_player.play()
+                if self._has_music_track():
+                    self._sync_music_playback_to_time(0.0, force_seek=True)
+                    if self.is_playing:
+                        self.music_player.play()
             else:
                 self._stop_playback_at_end()
                 return
         self.current_play_time = real_time
         self._sync_video_playback_to_time(real_time, force_seek=False)
+        self._sync_music_playback_to_time(real_time, force_seek=False)
         self._update_time_label()
         self.timeline_widget.update_playhead(real_time); self.update_floating_subtitle(); self._update_workspace_status()
         
@@ -5384,6 +5799,7 @@ body {{
         else:
             self.player.setPosition(int(time_sec * 1000))
         if self.state.get("audio_path"): self.audio_player.setPosition(int(time_sec * 1000))
+        self._sync_music_playback_to_time(time_sec, force_seek=True)
         self._update_time_label()
         self.timeline_widget.update_playhead(time_sec); self.update_floating_subtitle(); self._update_workspace_status()
 
@@ -5624,10 +6040,11 @@ body {{
             
             is_break = False
             
+            tiktok_smart = "智能听译" in mode or "4-6词" in mode or "4-6" in mode
             smart_short = "智能重点" in mode or "3-4词为主" in mode
             natural_short = "自然短句" in mode or "1-4" in mode
             fixed_count = 0
-            if not natural_short and not smart_short:
+            if not natural_short and not smart_short and not tiktok_smart:
                 if "短句快速" in mode or "1-3" in mode:
                     fixed_count = 3
                 elif "双词" in mode or "2词" in mode:
@@ -5652,6 +6069,21 @@ body {{
                 is_break = True
             elif fixed_count:
                 is_break = w_len >= fixed_count or force_break
+            elif tiktok_smart:
+                if force_break:
+                    is_break = True
+                elif has_punct and w_len >= 4:
+                    is_break = True
+                elif silence_gap > 0.46 and w_len >= 3:
+                    is_break = True
+                elif silence_gap > 0.28 and w_len >= 4:
+                    is_break = True
+                elif is_key_word and w_len >= 5 and (silence_gap > 0.14 or curr_dur > 1.55):
+                    is_break = True
+                elif w_len >= 6:
+                    is_break = True
+                elif w_len >= 5 and curr_dur > 2.05:
+                    is_break = True
             elif smart_short:
                 long_slot = (len(subs) + int(float(curr.get("start", 0.0)) * 10)) % 5 == 3
                 if force_break:
@@ -5920,6 +6352,7 @@ body {{
                 self.v_scale_spin.setValue(self.state.get("v_scale", 100))
                 self.v_vol_spin.setValue(self.state.get("v_volume", 100))
                 self.a_vol_spin.setValue(self.state.get("a_volume", 100))
+                self.music_vol_spin.setValue(self.state.get("music_volume", 35))
                 chunk_value = self.state.get("chunk_mode", "双行大段 (约10字，智能折行)")
                 timing_value = self.state.get("timing_mode", "J Cut (字幕稍后收尾)")
                 if "对齐声音" in chunk_value:
@@ -5951,6 +6384,8 @@ body {{
                     self.generate_waveform(self.state.get("audio_path"), "a_wave_pixmap")
                 if self.state.get("music_path") and os.path.exists(self.state.get("music_path")) and hasattr(self, "btn_music"):
                     self.btn_music.setText("✅ " + os.path.basename(self.state.get("music_path"))[:15])
+                    self.music_player.setSource(QUrl.fromLocalFile(self.state.get("music_path")))
+                    self.music_player.setLoops(QMediaPlayer.Loops.Infinite)
                 self.render_ui_list()
                 self.switch_inspector("empty")
                 self.push_history() # 初始化历史栈
@@ -5968,7 +6403,7 @@ body {{
             if isinstance(cached.get("default_style"), dict):
                 merged_default_style.update(cached.get("default_style", {}))
             cached["default_style"] = merged_default_style
-            self.state.update(cached); self.default_style.update(merged_default_style); self.state["signature"] = normalize_signature_config(self.state.get("signature"), self.default_style); self.sync_signature_controls(); self.last_render_hash = None; self.active_subs_cache = set(); self.v_scale_spin.setValue(self.state.get("v_scale", 100)); self.v_vol_spin.setValue(self.state.get("v_volume", 100)); self.a_vol_spin.setValue(self.state.get("a_volume", 100))
+            self.state.update(cached); self.default_style.update(merged_default_style); self.state["signature"] = normalize_signature_config(self.state.get("signature"), self.default_style); self.sync_signature_controls(); self.last_render_hash = None; self.active_subs_cache = set(); self.v_scale_spin.setValue(self.state.get("v_scale", 100)); self.v_vol_spin.setValue(self.state.get("v_volume", 100)); self.a_vol_spin.setValue(self.state.get("a_volume", 100)); self.music_vol_spin.setValue(self.state.get("music_volume", 35))
             chunk_value = self.state.get("chunk_mode", "双行大段 (约10字，智能折行)")
             timing_value = self.state.get("timing_mode", "J Cut (字幕稍后收尾)")
             if "对齐声音" in chunk_value:
@@ -5993,6 +6428,8 @@ body {{
                 self.btn_a.setText("✅ " + os.path.basename(self.state.get("audio_path"))[:15]); self.audio_player.setSource(QUrl.fromLocalFile(self.state.get("audio_path"))); self.generate_waveform(self.state.get("audio_path"), "a_wave_pixmap")
             if self.state.get("music_path") and os.path.exists(self.state.get("music_path")) and hasattr(self, "btn_music"):
                 self.btn_music.setText("✅ " + os.path.basename(self.state.get("music_path"))[:15])
+                self.music_player.setSource(QUrl.fromLocalFile(self.state.get("music_path")))
+                self.music_player.setLoops(QMediaPlayer.Loops.Infinite)
             self.render_ui_list(); self.switch_inspector("empty"); 
             self.push_history() # 初始化历史栈
             QTimer.singleShot(500, self._sync_duration_after_cache)
@@ -6025,6 +6462,10 @@ body {{
     
     def _sync_duration_after_cache(self):
         self.audio_output.setVolume(self.state.get("v_volume", 100) / 100.0); self.audio_track_output.setVolume(self.state.get("a_volume", 100) / 100.0)
+        if hasattr(self, "music_output"):
+            self.music_output.setVolume(float(self.state.get("music_volume", 35) or 35) / 100.0)
+        if self._has_music_track():
+            self._sync_music_playback_to_time(self.current_play_time, force_seek=True)
         self._recalc_duration(); self.sync_player_to_time(0.1) 
         
     def _get_target_clips(self):

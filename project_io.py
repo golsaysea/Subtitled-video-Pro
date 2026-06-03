@@ -102,7 +102,7 @@ def _backfill_edit_room_from_legacy_fields(merged, source):
     if not edit_state.get("music_asset_rel_path") and media_files.get("music_asset_rel_path"):
         edit_state["music_asset_rel_path"] = media_files.get("music_asset_rel_path", "")
 
-    for key in ("duration", "resolution", "v_scale", "v_volume", "a_volume", "music_volume", "chunk_mode", "timing_mode", "fill_subtitle_gaps"):
+    for key in ("duration", "resolution", "v_scale", "v_volume", "a_volume", "music_volume", "music_dur", "music_match_duration", "music_loop", "chunk_mode", "timing_mode", "fill_subtitle_gaps"):
         if key in source and source.get(key) not in (None, ""):
             try:
                 current_duration = float(str(edit_state.get("duration", 0) or 0).replace(",", "."))
@@ -244,6 +244,7 @@ def _base_project_data(path, project_type, project_name):
                 "video_clips": [], "audio_path": "", "music_path": "", "subs_data": [],
                 "duration": 10.0, "resolution": get_output_resolution(),
                 "v_scale": 100, "v_volume": 100, "a_volume": 100, "music_volume": 35,
+                "music_dur": 0.0, "music_match_duration": 0.0, "music_loop": True,
                 "chunk_mode": "双行大段 (约10字，智能折行)",
                 "timing_mode": "J Cut (字幕稍后收尾)",
                 "fill_subtitle_gaps": True,

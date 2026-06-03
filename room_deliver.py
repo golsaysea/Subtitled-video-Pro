@@ -516,6 +516,16 @@ class DeliverView(QWidget):
             if len(a_trim) >= 2:
                 durations.append(max(0.0, self._safe_float(a_trim[1], 0.0) - self._safe_float(a_trim[0], 0.0)))
 
+        music_path = state.get("music_path", "")
+        if music_path:
+            music_target = self._safe_float(state.get("music_match_duration"), 0.0)
+            if music_target <= 0:
+                music_target = self._safe_float(state.get("music_dur"), 0.0)
+            if music_target <= 0 and os.path.exists(music_path):
+                music_target = get_exact_duration(music_path)
+            if music_target > 0:
+                durations.append(music_target)
+
         content_dur = max(durations) if durations else 0.0
         guarded_dur = content_dur + render_tail_padding_seconds() if content_dur > 0 else 1.0
         if requested is not None:

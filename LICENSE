@@ -51,7 +51,7 @@ documents a valid Riverbank commercial license for PyQt/PyQt-WebEngine.
 | Unknown | 0 | None found in direct runtime dependencies |
 | Non-open-source | 0 | None found in direct runtime dependencies |
 
-Bundled asset note: `fonts/open/open_fonts_manifest.json` records 21 bundled font files under `OFL-1.1` or compatible open font licenses. These are release assets, not package-manager direct runtime dependencies.
+Bundled asset note: `fonts/open/open_fonts_manifest.json` records 22 bundled font files under `OFL-1.1` or compatible open font licenses. These are release assets, not package-manager direct runtime dependencies.
 
 ## Compatibility Details
 

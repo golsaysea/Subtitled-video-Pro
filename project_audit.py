@@ -40,6 +40,10 @@ def _media_entries(project_data):
     audio_path = edit_state.get("audio_path", "")
     if audio_path:
         entries.append({"kind": "audio", "label": "A1", "path": audio_path})
+
+    music_path = edit_state.get("music_path", "")
+    if music_path:
+        entries.append({"kind": "music", "label": "M1", "path": music_path})
     return entries
 
 
